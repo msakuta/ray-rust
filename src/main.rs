@@ -20,18 +20,21 @@ const YFOV: f32 = (YMAX as f32 / XMAX as f32);
 
 
 fn main() -> std::io::Result<()> {
-    println!("Hello, world!");
 
-    let mut data: [u8; (WIDTH * HEIGHT)] = [0u8; WIDTH * HEIGHT];
+    let mut data: [u8; (3 * WIDTH * HEIGHT)] = [0u8; 3 * WIDTH * HEIGHT];
 
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
-            data[x + y * WIDTH] = ((x + y) % 64) as u8;
+            data[(x + y * WIDTH) * 3 + 0] = ((x + y) % 64) as u8;
+            data[(x + y * WIDTH) * 3 + 1] = ((x + y) % 64 + 32) as u8;
+            data[(x + y * WIDTH) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &FCOLOR| {
-        data[x as usize + y as usize * WIDTH] = (fc.fred * 255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 0] = (fc.fred * 255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 1] = (fc.fgreen * 255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 2] = (fc.fblue * 255.) as u8;
         // PutPointWin(&wg, x, ren.yres - y,
         //     RGB((BYTE )(fc->fred > 1.F ? 255 : fc->fred * 255),
         //         (BYTE )(fc->fgreen > 1.F ? 255 : fc->fgreen * 255),
@@ -76,5 +79,5 @@ fn main() -> std::io::Result<()> {
     let buffer = File::create("foo.png")?;
     let encoder = PNGEncoder::new(buffer);
 
-    encoder.encode(&data, WIDTH as u32, HEIGHT as u32, ColorType::Gray(8))
+    encoder.encode(&data, WIDTH as u32, HEIGHT as u32, ColorType::RGB(8))
 }
