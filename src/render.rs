@@ -14,7 +14,7 @@ const RONLY: u32 = (GIGNORE|BIGNORE);
 const GONLY: u32 = (RIGNORE|BIGNORE);
 const BONLY: u32 = (RIGNORE|GIGNORE);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FCOLOR{
 	pub fred: f32,
 	pub fgreen: f32,
@@ -231,6 +231,7 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
         ];
 		view = matcat(&view, &mp);
 	}
+    // println!("Projection: {:?}", view);
 /*	view.x[0][3] = 100.;
 	view.x[1][3] = 0.;
 	view.x[2][3] = 30.;*/
@@ -248,7 +249,7 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 			eye = NORMALIZE(&eye);
 
 			raytrace(ren, &mut vi, &mut eye, &mut fc, 0, 0);
-            //println!("Writing {},{},eye: {:?}", ix, iy, eye);
+            if fc.fred > 0. { println!("Writing {},{},eye: {:?}", ix, iy, eye); }
 			pointproc(ix, iy, &fc);
 		}
 	}
@@ -480,7 +481,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 
 			normal(ren, Idx,&pt,&mut n);
 			shading(ren, Idx,&n,&pt,eye,&mut fc, lev);
-            println!("Hit something: {} normal: {:?} shading: {:?}", Idx, n, fc);
+            // println!("Hit something: {} eye: {:?} normal: {:?} shading: {:?}", Idx, eye, n, fc);
 
 			let o: &SOBJECT = &ren.objects[Idx];
 			(o.vft.ksproc)(o, &pt, &mut ks);
@@ -490,9 +491,10 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 			// 	ks.b = o.ksb;
 			// }
 
-			if(0 != (RIGNORE & flags)) { pColor.fred	+= fc.fred * fcs.fred; fcs.fred	*= ks.r; }
-			if(0 != (GIGNORE & flags)) { pColor.fgreen	+= fc.fgreen * fcs.fgreen; fcs.fgreen	*= ks.g; }
-			if(0 != (BIGNORE & flags)) { pColor.fblue	+= fc.fblue * fcs.fblue; fcs.fblue	*= ks.b; }
+			// if(0 != (RIGNORE & flags)) { pColor.fred	+= fc.fred * fcs.fred; fcs.fred	*= ks.r; }
+			// if(0 != (GIGNORE & flags)) { pColor.fgreen	+= fc.fgreen * fcs.fgreen; fcs.fgreen	*= ks.g; }
+			// if(0 != (BIGNORE & flags)) { pColor.fblue	+= fc.fblue * fcs.fblue; fcs.fblue	*= ks.b; }
+            *pColor = fc.clone();
 
 			if ((fcs.fred + fcs.fgreen + fcs.fblue) <= 0.1) {
 				break;

@@ -8,8 +8,8 @@ mod render;
 
 use render::{POS3D, fcolor_t, FCOLOR, floor_static, render_object_static_def, SOBJECT, render_env, render};
 
-const WIDTH: usize = 64;
-const HEIGHT: usize = 64;
+const WIDTH: usize = 256;
+const HEIGHT: usize = 256;
 
 const XRES: usize = WIDTH / 2/*WIDTH*//*320*/;
 const YRES: usize = HEIGHT / 2/*HEIGHT*//*200*/;
@@ -25,8 +25,8 @@ fn main() -> std::io::Result<()> {
 
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
-            data[(x + y * WIDTH) * 3 + 0] = ((x + y) % 64) as u8;
-            data[(x + y * WIDTH) * 3 + 1] = ((x + y) % 64 + 32) as u8;
+            data[(x + y * WIDTH) * 3 + 0] = ((x) * 255 / WIDTH) as u8;
+            data[(x + y * WIDTH) * 3 + 1] = ((y) * 255 / HEIGHT) as u8;
             data[(x + y * WIDTH) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
@@ -61,7 +61,7 @@ fn main() -> std::io::Result<()> {
 
     use std::f32::consts::PI;
     let mut ren: render_env = render_env{
-        cam: POS3D::new(0., -150., -600.), /* cam */
+        cam: POS3D::new(0., -150., -300.), /* cam */
         pyr: POS3D::new(0., -PI / 2., -PI / 2.), /* pyr */
         xres: XMAX as i32,
         yres: YMAX as i32, /* xres, yres */
