@@ -342,8 +342,7 @@ fn shading(ren: &mut RENDER,
 			n: &POS3D,
 			pt: &POS3D,
 			eye: &POS3D,
-			fc: &mut FCOLOR,
-			nest: i32)
+			nest: i32) -> FCOLOR
 {
     // let mut lv: f32;
     let (ln, pt2, lv) = {
@@ -399,7 +398,7 @@ fn shading(ren: &mut RENDER,
 	// }
 
 	/* refraction! */
-	if(nest < MAXREFLAC && 0. < ren.objects[Idx].t){
+	if nest < MAXREFLAC && 0. < ren.objects[Idx].t {
 		let mut ray = POS3D::zero();
 		let mut fc2 = FCOLOR::new(0., 0., 0.);
 		let mut i: i32;
@@ -437,14 +436,18 @@ fn shading(ren: &mut RENDER,
 			f = 0;
 			ren->bgproc(&ray, &fc2);
 		}*/
-		fc.fred	= (kd.r * k1 + k2) * (1. - f) + fc2.fred * f;
-		fc.fgreen	= (kd.g * k1 + k2) * (1. - f) + fc2.fgreen * f;
-		fc.fblue	= (kd.b * k1 + k2) * (1. - f) + fc2.fblue * f;
+        FCOLOR{
+            fred: (kd.r * k1 + k2) * (1. - f) + fc2.fred * f,
+            fgreen: (kd.g * k1 + k2) * (1. - f) + fc2.fgreen * f,
+            fblue: (kd.b * k1 + k2) * (1. - f) + fc2.fblue * f,
+        }
 	}
 	else{
-		fc.fred	= kd.r * k1 + k2;
-		fc.fgreen	= kd.g * k1 + k2;
-		fc.fblue	= kd.b * k1 + k2;
+		FCOLOR{
+            fred: kd.r * k1 + k2,
+            fgreen: kd.g * k1 + k2,
+            fblue: kd.b * k1 + k2,
+        }
 	}
 }
 
@@ -481,8 +484,8 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
             pt.z = eye.z * t + vi.z;
 
 			let n = normal(ren, Idx,&pt);
-			shading(ren, Idx,&n,&pt,eye,&mut fc, lev);
-            // println!("Hit something: {} eye: {:?} normal: {:?} shading: {:?}", Idx, eye, n, fc);
+			fc = shading(ren, Idx,&n,&pt,eye, lev);
+            println!("Hit something: {} eye: {:?} normal: {:?} shading: {:?}", Idx, eye, n, fc);
 
 			let o: &SOBJECT = &ren.objects[Idx];
 			(o.vft.ksproc)(o, &pt, &mut ks);
