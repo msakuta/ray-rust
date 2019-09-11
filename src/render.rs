@@ -345,52 +345,50 @@ fn shading(ren: &mut RENDER,
 			fc: &mut FCOLOR,
 			nest: i32)
 {
-	let mut ln: f32;
-    let mut ln2: f32;
-    let mut lv: f32;
-    let mut k1: f32;
-    let mut k2: f32;
-	let mut pt2 = POS3D::new(0., 0., 0.);
-    let mut r = POS3D::new(0., 0., 0.);
-	let mut kd = fcolor_t::new(0., 0., 0.);
-	let mut i: usize;
-	let object: &Vec<SOBJECT> = &ren.objects;
-    {
+    // let mut lv: f32;
+    let (ln, pt2, lv) = {
         let o = &ren.objects[Idx];
 
         /* scalar product of light normal and surface normal */
-        ln = ren.light.x * n.x + ren.light.y * n.y + ren.light.z * n.z;
-        ln2 = 2.0 * ln;
-        r.x = ln2 * n.x - ren.light.x;
-        r.y = ln2 * n.y - ren.light.y;
-        r.z = ln2 * n.z - ren.light.z;
-
-        if 0 != o.pn {
-            lv = -r.x * eye.x - r.y * eye.y - r.z * eye.z;
-            if (lv > 0.0) { lv = lv.powi(ren.objects[Idx].pn); }
-            else          { lv = 0.0; }
-        }
-        else { lv = 0.; }
-
-        if (ln < 0.0) { ln = 0.0; }
+        let ln = ren.light.SPROD(n);
+        let ln2 = 2.0 * ln;
+        let r = POS3D::new(
+            ln2 * n.x - ren.light.x,
+            ln2 * n.y - ren.light.y,
+            ln2 * n.z - ren.light.z,
+        );
 
         let EPS = std::f32::EPSILON;
-        pt2.x = pt.x + ren.light.x * EPS;
-        pt2.y = pt.y + ren.light.y * EPS;
-        pt2.z = pt.z + ren.light.z * EPS;
-    }
+        (
+            if ln < 0.0 { 0.0 } else { ln },
+            POS3D::new(
+                pt.x + ren.light.x * EPS,
+                pt.y + ren.light.y * EPS,
+                pt.z + ren.light.z * EPS,
+            ),
+            if 0 != o.pn {
+                let lv = -r.SPROD(eye);
+                if lv > 0.0 { lv.powi(o.pn) }
+                else        { 0.0 }
+            }
+            else { 0. }
+        )
+    };
 
-	/* shadow trace */
-	{
-		let mut ray: POS3D = ren.light.clone();
-		k1 = 0.2;	k2 = 0.;
-		i = Idx;
-		if(raycast(ren, &pt2,&ray,&mut i,None /*Some(&ren.objects[Idx])*/, 0) >= std::f32::INFINITY || 0. < ren.objects[Idx].t){
-			k1 += ln;
-            k2 = lv;
-		}
-	}
+    /* shadow trace */
+    let (k1, k2) = {
+        let ray: POS3D = ren.light.clone();
+        let k1 = 0.2;
+        let mut i = Idx;
+        if raycast(ren, &pt2,&ray,&mut i,None /*Some(&ren.objects[Idx])*/, 0) >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
+            (k1 + ln, lv)
+        }
+        else {
+            (0., 0.)
+        }
+    };
 
+    let mut kd = fcolor_t::new(0., 0., 0.);
     let o = &ren.objects[Idx];
 	/* face texturing */
 		(o.vft.kdproc)(o, pt, &mut kd);
@@ -420,10 +418,12 @@ fn shading(ren: &mut RENDER,
 			ray.z = eye.z + reference * n.z;
 			ray = NORMALIZE(&ray);
             let EPS = std::f32::EPSILON;
-			pt2.x = pt.x + ray.x * EPS;
-			pt2.y = pt.y + ray.y * EPS;
-			pt2.z = pt.z + ray.z * EPS;
-			raytrace(ren, &mut pt2, &mut ray, &mut fc2, nest, if sp < 0. { OUTONLY } else { INONLY });
+			let mut pt3 = POS3D::new(
+                pt.x + ray.x * EPS,
+                pt.y + ray.y * EPS,
+                pt.z + ray.z * EPS,
+            );
+			raytrace(ren, &mut pt3, &mut ray, &mut fc2, nest, if sp < 0. { OUTONLY } else { INONLY });
 		}
 /*		t = raycast(ren, &pt2, &ray, &i, &ren->objects[Idx], OUTONLY);
 		if(t < INFINITY)
