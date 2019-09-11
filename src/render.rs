@@ -324,14 +324,16 @@ fn raycast(ren: &mut RENDER, vi: &POS3D, eye: &POS3D, pIdx: &mut usize,
 }
 
 /* calculate normalized normal vector */
-fn normal(ren: &mut RENDER, Idx: usize, pt: &POS3D, n: &mut POS3D)
+fn normal(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
 {
-	if 0 != Idx { *n = ren.vnm.clone(); }
+	if 0 != Idx { ren.vnm.clone() }
 	else{
-		n.x = pt.x - ren.objects[Idx].org.x;
-		n.y = pt.y - ren.objects[Idx].org.y;
-		n.z = pt.z - ren.objects[Idx].org.z;
-		*n = NORMALIZE(n);
+		NORMALIZE(&POS3D{
+            x: pt.x - ren.objects[Idx].org.x,
+            y: pt.y - ren.objects[Idx].org.y,
+            z: pt.z - ren.objects[Idx].org.z,
+            reserved: 0.
+        })
 	}
 }
 
@@ -453,8 +455,6 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 	let mut Idx: usize = 0;
 	let mut t: f32;
     let mut en2: f32;
-	let mut n = POS3D::zero();
-    let mut pt = POS3D::zero();
 	let mut fc = FCOLOR::new(0., 0., 0.);
     let mut fcs = FCOLOR::new(0., 0., 0.);
 	let mut ig: Option<&SOBJECT> = None;
@@ -475,11 +475,12 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 /*			t -= EPS;*/
 
 			/* shared point */
-			pt.x = eye.x * t + vi.x;
-			pt.y = eye.y * t + vi.y;
-			pt.z = eye.z * t + vi.z;
+            let mut pt = POS3D::zero();
+            pt.x = eye.x * t + vi.x;
+            pt.y = eye.y * t + vi.y;
+            pt.z = eye.z * t + vi.z;
 
-			normal(ren, Idx,&pt,&mut n);
+			let n = normal(ren, Idx,&pt);
 			shading(ren, Idx,&n,&pt,eye,&mut fc, lev);
             // println!("Hit something: {} eye: {:?} normal: {:?} shading: {:?}", Idx, eye, n, fc);
 
