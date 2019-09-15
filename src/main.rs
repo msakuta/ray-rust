@@ -1,6 +1,7 @@
 extern crate image;
 
 use std::fs::File;
+use std::env;
 use image::png::PNGEncoder;
 use image::ColorType;
 
@@ -8,20 +9,33 @@ mod render;
 
 use render::{POS3D, fcolor_t, FCOLOR, floor_static, render_object_static_def, SOBJECT, render_env, render};
 
-const WIDTH: usize = 256;
-const HEIGHT: usize = 256;
-
-const XRES: usize = WIDTH / 2/*WIDTH*//*320*/;
-const YRES: usize = HEIGHT / 2/*HEIGHT*//*200*/;
-const XMAX: usize = WIDTH/*	((XRES + 1) * 2)*/;
-const YMAX: usize = HEIGHT/*	((YRES + 1) * 2)*/;
-const XFOV: f32 = 1.;
-const YFOV: f32 = (YMAX as f32 / XMAX as f32);
 
 
 fn main() -> std::io::Result<()> {
 
-    let mut data: [u8; (3 * WIDTH * HEIGHT)] = [0u8; 3 * WIDTH * HEIGHT];
+    let args: Vec<String> = env::args().collect();
+    println!("{:?}", args);
+
+    let (WIDTH, HEIGHT): (usize, usize) = {
+        let mut width = 256;
+        let mut height = 256;
+        if 1 < args.len() {
+            width = args[1].parse().expect("width must be an int");
+        }
+        if 2 < args.len() {
+            height = args[2].parse().expect("height must be an int");
+        }
+        (width, height)
+    };
+
+    let XRES: usize = WIDTH / 2/*WIDTH*//*320*/;
+    let YRES: usize = HEIGHT / 2/*HEIGHT*//*200*/;
+    let XMAX: usize = WIDTH/*	((XRES + 1) * 2)*/;
+    let YMAX: usize = HEIGHT/*	((YRES + 1) * 2)*/;
+    let XFOV: f32 = 1.;
+    let YFOV: f32 = (YMAX as f32 / XMAX as f32);
+
+    let mut data = vec![0u8; 3 * WIDTH * HEIGHT];
 
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
