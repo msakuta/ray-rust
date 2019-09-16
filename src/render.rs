@@ -29,17 +29,15 @@ impl FCOLOR{
 }
 
 #[derive(Debug, Clone)]
-pub struct render_fcolor{
+pub struct RenderColor{
 	r: f32,
     g: f32,
     b: f32/*, _*/
 }
 
-pub type fcolor_t = render_fcolor;
-
-impl fcolor_t{
-    pub fn new(r: f32, g: f32, b: f32) -> fcolor_t {
-        fcolor_t{r, g, b}
+impl RenderColor{
+    pub fn new(r: f32, g: f32, b: f32) -> Self {
+        Self{r, g, b}
     }
 }
 
@@ -76,8 +74,8 @@ impl POS3D{
     }
 }
 
-fn floorkd(ths: &SOBJECT, pt: &POS3D) -> fcolor_t{
-    fcolor_t::new(
+fn floorkd(ths: &SOBJECT, pt: &POS3D) -> RenderColor{
+    RenderColor::new(
         (50. + (pt.x - ths.org.x) / 300.) % 1.,
         (50. + (pt.z - ths.org.z) / 300.) % 1.,
         1.
@@ -90,55 +88,53 @@ fn floorkd(ths: &SOBJECT, pt: &POS3D) -> fcolor_t{
 	}*/
 }
 
-pub struct render_object_static{
-	kdproc: fn(ths: &render_object, pt: &POS3D) -> fcolor_t,
-	ksproc: fn(ths: &render_object, pt: &POS3D) -> fcolor_t,
+pub struct RenderObjectStatic{
+	kdproc: fn(ths: &RenderObject, pt: &POS3D) -> RenderColor,
+	ksproc: fn(ths: &RenderObject, pt: &POS3D) -> RenderColor,
 }
 
-pub type SOBJECT_S = render_object_static;
-
-pub const floor_static: SOBJECT_S = SOBJECT_S{
+pub const floor_static: RenderObjectStatic = RenderObjectStatic{
     kdproc: floorkd,
     ksproc: floorkd,
 };
 
-fn kdproc_def(ths: &render_object, pt: &POS3D) -> fcolor_t{
+fn kdproc_def(ths: &RenderObject, pt: &POS3D) -> RenderColor{
 	ths.diffuse.clone()
 }
-fn ksproc_def(ths: &render_object, pt: &POS3D) -> fcolor_t{
+fn ksproc_def(ths: &RenderObject, pt: &POS3D) -> RenderColor{
 	ths.specular.clone()
 }
 
-pub const render_object_static_def: SOBJECT_S = SOBJECT_S{
+pub const render_object_static_def: RenderObjectStatic = RenderObjectStatic{
     kdproc: kdproc_def,
     ksproc: ksproc_def,
 };
 
 
-pub struct render_object{
-	vft: &'static SOBJECT_S, /* virtual function table */
+pub struct RenderObject{
+	vft: &'static RenderObjectStatic, /* virtual function table */
 	r: f32,			/* Radius */
 	org: POS3D,		/* Center */
-	diffuse: fcolor_t, /* Diffuse(R,G,B) */
-	specular: fcolor_t,/* Specular(R,G,B) */
+	diffuse: RenderColor, /* Diffuse(R,G,B) */
+	specular: RenderColor,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
 	t: f32, /* transparency, unit length per decay */
 	n: f32, /* reflaction constant */
-	frac: fcolor_t /* reflaction per spectrum */
+	frac: RenderColor /* reflaction per spectrum */
 }
 
-pub type SOBJECT = render_object;
+pub type SOBJECT = RenderObject;
 
-impl render_object{
+impl RenderObject{
     pub fn new(
-        vft: &'static SOBJECT_S,
+        vft: &'static RenderObjectStatic,
         r: f32, org: POS3D,
-        diffuse: fcolor_t,
-        specular: fcolor_t,
+        diffuse: RenderColor,
+        specular: RenderColor,
         pn: i32, t: f32, n: f32,
-        frac: fcolor_t
-    ) -> render_object {
-        render_object{
+        frac: RenderColor
+    ) -> RenderObject {
+        RenderObject{
             vft,
             r,
             org,
@@ -152,7 +148,7 @@ impl render_object{
     }
 }
 
-pub struct render_env{
+pub struct RenderEnv{
     pub cam: POS3D, /* camera position */
     pub pyr: POS3D, /* camera direction in pitch yaw roll form */
     pub xres: i32,
@@ -163,16 +159,12 @@ pub struct render_env{
     pub nobj: i32,
     pub light: POS3D,
     pub vnm: POS3D,
-    pub bgproc: fn(pos: &POS3D, fcolor: &mut fcolor_t)
+    pub bgproc: fn(pos: &POS3D, fcolor: &mut RenderColor)
 }
 
-type RENDER = render_env;
+type Mat4 = [[f32; 4]; 3];
 
-type mat4 = [[f32; 4]; 3];
-
-type MAT4 = mat4;
-
-const unimat: MAT4 = [[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.]];
+const unimat: Mat4 = [[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.]];
 
 fn NORMALIZE(v: &POS3D) -> POS3D {
     let mut len: f32;
@@ -180,7 +172,7 @@ fn NORMALIZE(v: &POS3D) -> POS3D {
 	POS3D{x: (v).x / len, y: (v).y / len, z: (v).z / len, reserved: 0.}
 }
 
-fn concat(m: &MAT4, v: &POS3D) -> POS3D{
+fn concat(m: &Mat4, v: &POS3D) -> POS3D{
 	let mut ret = POS3D{
         x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3],
         y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3],
@@ -191,8 +183,8 @@ fn concat(m: &MAT4, v: &POS3D) -> POS3D{
 }
 
 
-fn matcat(m1: &MAT4, m2: &MAT4) -> MAT4{
-	let mut ret: MAT4 = unimat;
+fn matcat(m1: &Mat4, m2: &Mat4) -> Mat4{
+	let mut ret: Mat4 = unimat;
 	for i in 0..3 {
         for j in 0..4 {
             ret[i][j] =
@@ -206,10 +198,10 @@ fn matcat(m1: &MAT4, m2: &MAT4) -> MAT4{
 
 
 
-pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
+pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 	let mut ix: i32;
     let mut iy: i32;
-	let mut view: MAT4 = unimat;
+	let mut view: Mat4 = unimat;
 
 	ren.light = NORMALIZE(&ren.light);
 	ren.vnm = NORMALIZE(&ren.vnm);
@@ -263,7 +255,7 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 
 /* find first object the ray hits */
 /// @returns time at which ray intersects with a shape and its object id.
-fn raycast(ren: &RENDER, vi: &POS3D, eye: &POS3D,
+fn raycast(ren: &RenderEnv, vi: &POS3D, eye: &POS3D,
     ig: Option<&SOBJECT>, flags: u32) -> (f32, usize)
 {
     let mut t = std::f32::INFINITY;
@@ -323,7 +315,7 @@ fn raycast(ren: &RENDER, vi: &POS3D, eye: &POS3D,
 }
 
 /* calculate normalized normal vector */
-fn normal_vector(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
+fn normal_vector(ren: &RenderEnv, Idx: usize, pt: &POS3D) -> POS3D
 {
     if 0 == Idx { ren.vnm.clone() }
     else{
@@ -335,7 +327,7 @@ fn normal_vector(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
 	}
 }
 
-fn shading(ren: &mut RENDER,
+fn shading(ren: &mut RenderEnv,
             Idx: usize,
             n: &POS3D,
             pt: &POS3D,
@@ -442,7 +434,7 @@ fn shading(ren: &mut RENDER,
 }
 
 
-fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D,
+fn raytrace(ren: &mut RenderEnv, vi: &mut POS3D, eye: &mut POS3D,
     mut lev: i32, mut flags: u32) -> FCOLOR
 {
     let mut fcs = FCOLOR::new(1., 1., 1.);
@@ -506,7 +498,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D,
 			ig = Some(&ren.objects[idx]);
 		}
 		else{
-			let mut fc2 = fcolor_t::new(0., 0., 0.);
+			let mut fc2 = RenderColor::new(0., 0., 0.);
 			(ren.bgproc)(eye, &mut fc2);
 			ret_color.fred	+= fc2.r * fcs.fred;
 			ret_color.fgreen	+= fc2.g * fcs.fgreen;
