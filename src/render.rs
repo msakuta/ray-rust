@@ -209,7 +209,6 @@ fn matcat(m1: &MAT4, m2: &MAT4) -> MAT4{
 pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 	let mut ix: i32;
     let mut iy: i32;
-	let mut fc = FCOLOR{fred: 0., fgreen: 0., fblue: 0.};
 	let mut view: MAT4 = unimat;
 
 	ren.light = NORMALIZE(&ren.light);
@@ -244,23 +243,21 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 	view.x[1][3] = 0.;
 	view.x[2][3] = 30.;*/
 
-	for iy in 0..ren.yres {
-		for ix in 0..ren.xres {
-			let mut vi = ren.cam.clone();
+    for iy in 0..ren.yres {
+        for ix in 0..ren.xres {
+            let mut vi = ren.cam.clone();
             let mut eye: POS3D = POS3D{ /* cast ray direction vector? */
                 x: 1.,
                 y: (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
                 z: -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
                 reserved: 0.
             };
-			eye = concat(&view, &eye);
-			eye = NORMALIZE(&eye);
+            eye = concat(&view, &eye);
+            eye = NORMALIZE(&eye);
 
-			raytrace(ren, &mut vi, &mut eye, &mut fc, 0, 0);
-            if fc.fred > 0. { println!("Writing {},{},eye: {:?}", ix, iy, eye); }
-			pointproc(ix, iy, &fc);
-		}
-	}
+            pointproc(ix, iy, &raytrace(ren, &mut vi, &mut eye, 0, 0));
+        }
+    }
 }
 
 
@@ -346,7 +343,7 @@ fn shading(ren: &mut RENDER,
             nest: i32) -> FCOLOR
 {
     // let mut lv: f32;
-    let (lightIncidence, reflectedRay, reflectionIntensity) = {
+    let (diffuseIntensity, reflectedRay, reflectionIntensity) = {
         let o = &ren.objects[Idx];
 
         /* scalar product of light normal and surface normal */
@@ -381,10 +378,10 @@ fn shading(ren: &mut RENDER,
         let k1 = 0.2;
         let (t, i) = raycast(ren, &reflectedRay, &ray, Some(&ren.objects[Idx]), 0);
         if t >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
-            (k1 + lightIncidence, reflectionIntensity)
+            (k1 + diffuseIntensity, reflectionIntensity)
         }
         else {
-            (0., 0.)
+            (k1, 0.)
         }
     };
 
@@ -400,11 +397,10 @@ fn shading(ren: &mut RENDER,
 
 	/* refraction! */
 	if nest < MAXREFLAC && 0. < ren.objects[Idx].t {
-		let mut fc2 = FCOLOR::new(0., 0., 0.);
 		let sp = eye.SPROD(&n);
 		let f = o.t;
 
-		{
+		let fc2 = {
 			let reference = sp * (if sp > 0. { ren.objects[Idx].n } else { 1. / ren.objects[Idx].n } - 1.);
             let mut ray = POS3D::new(
                 eye.x + reference * n.x,
@@ -417,8 +413,8 @@ fn shading(ren: &mut RENDER,
                 pt.y + ray.y * EPS,
                 pt.z + ray.z * EPS,
             );
-			raytrace(ren, &mut pt3, &mut ray, &mut fc2, nest, if sp < 0. { OUTONLY } else { INONLY });
-		}
+            raytrace(ren, &mut pt3, &mut ray, nest, if sp < 0. { OUTONLY } else { INONLY })
+		};
 /*		t = raycast(ren, &reflectedRay, &ray, &i, &ren->objects[Idx], OUTONLY);
 		if(t < INFINITY)
 		{
@@ -447,19 +443,18 @@ fn shading(ren: &mut RENDER,
 }
 
 
-fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOLOR,
-    mut lev: i32, mut flags: u32)
+fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D,
+    mut lev: i32, mut flags: u32) -> FCOLOR
 {
     let mut fcs = FCOLOR::new(1., 1., 1.);
 
-	pColor.fred = 0.;
-    pColor.fgreen = 0.;
-    pColor.fblue = 0.0;
+	let mut ret_color = FCOLOR::new(0., 0., 0.);
 /*	bgcolor(eye, pColor);*/
 
+    let mut ig: Option<&SOBJECT> = None;
 	loop {
 		lev += 1;
-		let (t, idx) = raycast(ren, vi, eye, None, flags);
+		let (t, idx) = raycast(ren, vi, eye, ig, flags);
 		if t < std::f32::INFINITY {
 			let mut ks = fcolor_t::new(0., 0., 0.);
 /*			t -= EPS;*/
@@ -472,9 +467,9 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 
 			let n = normal_vector(ren, idx, &pt);
 			let fc = shading(ren, idx,&n,&pt,eye, lev);
-            if idx == 1 {
-                println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, fc);
-            }
+            // if idx == 2 {
+            //     println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, fc);
+            // }
 
 			let o: &SOBJECT = &ren.objects[idx];
 			(o.vft.ksproc)(o, &pt, &mut ks);
@@ -487,7 +482,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 			// if(0 != (RIGNORE & flags)) { pColor.fred	+= fc.fred * fcs.fred; fcs.fred	*= ks.r; }
 			// if(0 != (GIGNORE & flags)) { pColor.fgreen	+= fc.fgreen * fcs.fgreen; fcs.fgreen	*= ks.g; }
 			// if(0 != (BIGNORE & flags)) { pColor.fblue	+= fc.fblue * fcs.fblue; fcs.fblue	*= ks.b; }
-            *pColor = fc.clone();
+            ret_color = fc.clone();
 
 			if ((fcs.fred + fcs.fgreen + fcs.fblue) <= 0.1) {
 				break;
@@ -510,18 +505,20 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
                 flags |= INONLY;
             }
 
-			//ig = Some(&ren.objects[Idx]);
+			ig = Some(&ren.objects[idx]);
 		}
 		else{
 			let mut fc2 = fcolor_t::new(0., 0., 0.);
 			(ren.bgproc)(eye, &mut fc2);
-			pColor.fred	+= fc2.r * fcs.fred;
-			pColor.fgreen	+= fc2.g * fcs.fgreen;
-			pColor.fblue	+= fc2.b * fcs.fblue;
+			ret_color.fred	+= fc2.r * fcs.fred;
+			ret_color.fgreen	+= fc2.g * fcs.fgreen;
+			ret_color.fblue	+= fc2.b * fcs.fblue;
 		}
         if !(t < std::f32::INFINITY && lev < MAXLEVEL) {
             break;
         }
 	}
+
+    ret_color
 }
 
