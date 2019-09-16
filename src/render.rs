@@ -28,7 +28,7 @@ impl FCOLOR{
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct render_fcolor{
 	r: f32,
     g: f32,
@@ -76,12 +76,12 @@ impl POS3D{
     }
 }
 
-fn floorkd(ths: &SOBJECT, pt: &POS3D, kd: &mut fcolor_t){
-	{
-		kd.r = (50. + (pt.x - ths.org.x) / 300.) % 1.;
-		kd.g = (50. + (pt.z - ths.org.z) / 300.) % 1.;
-        kd.b = 1.;
-	}
+fn floorkd(ths: &SOBJECT, pt: &POS3D) -> fcolor_t{
+    fcolor_t::new(
+        (50. + (pt.x - ths.org.x) / 300.) % 1.,
+        (50. + (pt.z - ths.org.z) / 300.) % 1.,
+        1.
+    )
 /*	{
 	double d, dd;
 	d = fmod(50. + (pt->x - ths->org.x) / 300., 1.) - .5;
@@ -91,8 +91,8 @@ fn floorkd(ths: &SOBJECT, pt: &POS3D, kd: &mut fcolor_t){
 }
 
 pub struct render_object_static{
-	kdproc: fn(ths: &render_object, pt: &POS3D, kd: &mut fcolor_t),
-	ksproc: fn(ths: &render_object, pt: &POS3D, ks: &mut fcolor_t),
+	kdproc: fn(ths: &render_object, pt: &POS3D) -> fcolor_t,
+	ksproc: fn(ths: &render_object, pt: &POS3D) -> fcolor_t,
 }
 
 pub type SOBJECT_S = render_object_static;
@@ -102,11 +102,11 @@ pub const floor_static: SOBJECT_S = SOBJECT_S{
     ksproc: floorkd,
 };
 
-fn kdproc_def(ths: &render_object, pt: &POS3D, kd: &mut fcolor_t){
-	kd.r = ths.kdr; kd.g = ths.kdg; kd.b = ths.kdb;
+fn kdproc_def(ths: &render_object, pt: &POS3D) -> fcolor_t{
+	ths.diffuse.clone()
 }
-fn ksproc_def(ths: &render_object, pt: &POS3D, ks: &mut fcolor_t){
-	ks.r = ths.ksr; ks.g = ths.ksg; ks.b = ths.ksb;
+fn ksproc_def(ths: &render_object, pt: &POS3D) -> fcolor_t{
+	ths.specular.clone()
 }
 
 pub const render_object_static_def: SOBJECT_S = SOBJECT_S{
@@ -119,8 +119,8 @@ pub struct render_object{
 	vft: &'static SOBJECT_S, /* virtual function table */
 	r: f32,			/* Radius */
 	org: POS3D,		/* Center */
-	kdr: f32, kdg: f32, kdb: f32, /* Diffuse(R,G,B) */
-	ksr: f32, ksg: f32, ksb: f32,/* Specular(R,G,B) */
+	diffuse: fcolor_t, /* Diffuse(R,G,B) */
+	specular: fcolor_t,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
 	t: f32, /* transparency, unit length per decay */
 	n: f32, /* reflaction constant */
@@ -133,8 +133,8 @@ impl render_object{
     pub fn new(
         vft: &'static SOBJECT_S,
         r: f32, org: POS3D,
-        kdr: f32, kdg: f32, kdb: f32,
-        ksr: f32, ksg: f32, ksb: f32,
+        diffuse: fcolor_t,
+        specular: fcolor_t,
         pn: i32, t: f32, n: f32,
         frac: fcolor_t
     ) -> render_object {
@@ -142,8 +142,8 @@ impl render_object{
             vft,
             r,
             org,
-            kdr, kdg, kdb,
-            ksr, ksg, ksb,
+            diffuse,
+            specular,
             pn,
             t,
             n,
@@ -385,10 +385,9 @@ fn shading(ren: &mut RENDER,
         }
     };
 
-    let mut kd = fcolor_t::new(0., 0., 0.);
     let o = &ren.objects[Idx];
 	/* face texturing */
-		(o.vft.kdproc)(o, pt, &mut kd);
+		let kd = (o.vft.kdproc)(o, pt);
 	// else{
 	// 	kd.fred = ren.objects[Idx].kdr;
 	// 	kd.fgreen = ren.objects[Idx].kdg;
@@ -456,7 +455,6 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D,
 		lev += 1;
 		let (t, idx) = raycast(ren, vi, eye, ig, flags);
 		if t < std::f32::INFINITY {
-			let mut ks = fcolor_t::new(0., 0., 0.);
 /*			t -= EPS;*/
 
 			/* shared point */
@@ -472,7 +470,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D,
             // }
 
 			let o: &SOBJECT = &ren.objects[idx];
-			(o.vft.ksproc)(o, &pt, &mut ks);
+			let ks = (o.vft.ksproc)(o, &pt);
 			// else{
 			// 	ks.r = o.ksr;
 			// 	ks.g = o.ksg;

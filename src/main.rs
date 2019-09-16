@@ -57,12 +57,12 @@ fn main() -> std::io::Result<()> {
 
     let objects: Vec<SOBJECT> = vec!{
     /* Plane */
-        SOBJECT::new(&floor_static,               0.0, POS3D::new(  0.0,-300.0,  0.0), 0.0, 0.5, 0.5, 0.0, 0.0, 0.0,  0, 0., 0., fcolor_t::new(1., 1., 1.)),
+        SOBJECT::new(&floor_static,               0.0, POS3D::new(  0.0,-300.0,  0.0), fcolor_t::new(0.0, 0.5, 0.5), fcolor_t::new(0.0, 0.0, 0.0),  0, 0., 0., fcolor_t::new(1., 1., 1.)),
     /* Spheres */
-        SOBJECT::new(&render_object_static_def,  80.0, POS3D::new(  0.0, -30.0,172.0), 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 24, 0., 0., fcolor_t::new(1., 1., 1.)),
-        SOBJECT::new(&render_object_static_def,  80.0, POS3D::new(-200.0,-200.0,172.0), 0.8, 0.0, 0.0, 0.0, 0.0, 0.0,24, 0., 0., fcolor_t::new(1., 1., 1.)),
+        SOBJECT::new(&render_object_static_def,  80.0, POS3D::new(  0.0, -30.0,172.0), fcolor_t::new(0.0, 0.0, 0.0), fcolor_t::new(1.0, 1.0, 1.0), 24, 0., 0., fcolor_t::new(1., 1., 1.)),
+        SOBJECT::new(&render_object_static_def,  80.0, POS3D::new(-200.0,-200.0,172.0), fcolor_t::new(0.8, 0.0, 0.0), fcolor_t::new(0.0, 0.0, 0.0),24, 0., 0., fcolor_t::new(1., 1., 1.)),
     /*	{&render_object_static_def,  80.0F,  70.0F,-200.0F,150.0F, 0.0F, 0.0F, 0.8F, 0.0F, 0.0F, 0.0F, 0.0F,24, 1., 1., {1.}},*/
-        SOBJECT::new(&render_object_static_def, 100.0, POS3D::new(70.0,-200.0,150.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 1., 1.5, fcolor_t::new(1.49998, 1.49999, 1.5)),
+        SOBJECT::new(&render_object_static_def, 100.0, POS3D::new(70.0,-200.0,150.0), fcolor_t::new(0.0, 0.0, 0.0), fcolor_t::new(0.0, 0.0, 0.0), 0, 1., 1.5, fcolor_t::new(1.49998, 1.49999, 1.5)),
     /*	{&render_object_static_def, 1000.F, 0.F, 0.F, 1500.F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F,24, 0, 0},*/
     /*	{&render_object_static_def,  100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
     };
