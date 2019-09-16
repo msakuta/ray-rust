@@ -240,9 +240,9 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 		for ix in 0..ren.xres {
 			let mut vi = ren.cam.clone();
             let mut eye: POS3D = POS3D{ /* cast ray direction vector? */
-			    x: 1.,
-			    y: (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
-			    z: (iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
+                x: 1.,
+                y: (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
+                z: -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
                 reserved: 0.
             };
 			eye = concat(&view, &eye);
