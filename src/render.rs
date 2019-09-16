@@ -313,7 +313,7 @@ fn normal_vector(ren: &RenderEnv, idx: usize, pt: &Vec3) -> Vec3
 	}
 }
 
-fn shading(ren: &mut RenderEnv,
+fn shading(ren: &RenderEnv,
             idx: usize,
             n: &Vec3,
             pt: &Vec3,
@@ -420,7 +420,7 @@ fn shading(ren: &mut RenderEnv,
 }
 
 
-fn raytrace(ren: &mut RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
+fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
     mut lev: i32, mut flags: u32) -> RenderColor
 {
     let fcs = RenderColor::new(1., 1., 1.);
