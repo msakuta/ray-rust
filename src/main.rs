@@ -46,9 +46,9 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &FCOLOR| {
-        data[(x as usize + y as usize * WIDTH) * 3 + 0] = (fc.fred * 255.) as u8;
-        data[(x as usize + y as usize * WIDTH) * 3 + 1] = (fc.fgreen * 255.) as u8;
-        data[(x as usize + y as usize * WIDTH) * 3 + 2] = (fc.fblue * 255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 0] = (fc.fred * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 1] = (fc.fgreen * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * WIDTH) * 3 + 2] = (fc.fblue * 255.).min(255.) as u8;
         // PutPointWin(&wg, x, ren.yres - y,
         //     RGB((BYTE )(fc->fred > 1.F ? 255 : fc->fred * 255),
         //         (BYTE )(fc->fgreen > 1.F ? 255 : fc->fgreen * 255),
