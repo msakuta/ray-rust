@@ -42,16 +42,16 @@ impl RenderColor{
 }
 
 #[derive(Clone, Debug)]
-pub struct POS3D{
+pub struct Vec3{
 	x: f32,
 	y: f32,
 	z: f32,
 	reserved: f32,
 }
 
-impl POS3D{
-    pub fn new(x: f32, y: f32, z: f32) -> POS3D{
-        POS3D{x, y, z, reserved: 1.}
+impl Vec3{
+    pub fn new(x: f32, y: f32, z: f32) -> Vec3{
+        Vec3{x, y, z, reserved: 1.}
     }
 
     pub fn zero() -> Self{
@@ -70,7 +70,7 @@ impl POS3D{
 
     pub fn normalized(&self) -> Self {
         let len = self.len();
-        POS3D::new(self.x / len, self.y / len, self.z / len)
+        Vec3::new(self.x / len, self.y / len, self.z / len)
     }
 
     pub fn normalize(&mut self){
@@ -81,7 +81,7 @@ impl POS3D{
     }
 }
 
-fn floorkd(ths: &SOBJECT, pt: &POS3D) -> RenderColor{
+fn floorkd(ths: &SOBJECT, pt: &Vec3) -> RenderColor{
     RenderColor::new(
         (50. + (pt.x - ths.org.x) / 300.) % 1.,
         (50. + (pt.z - ths.org.z) / 300.) % 1.,
@@ -97,8 +97,8 @@ fn floorkd(ths: &SOBJECT, pt: &POS3D) -> RenderColor{
 
 #[allow(dead_code)]
 pub struct RenderObjectStatic{
-	kdproc: fn(ths: &RenderObject, pt: &POS3D) -> RenderColor,
-	ksproc: fn(ths: &RenderObject, pt: &POS3D) -> RenderColor,
+	kdproc: fn(ths: &RenderObject, pt: &Vec3) -> RenderColor,
+	ksproc: fn(ths: &RenderObject, pt: &Vec3) -> RenderColor,
 }
 
 #[allow(non_upper_case_globals)]
@@ -107,10 +107,10 @@ pub const floor_static: RenderObjectStatic = RenderObjectStatic{
     ksproc: floorkd,
 };
 
-fn kdproc_def(ths: &RenderObject, _: &POS3D) -> RenderColor{
+fn kdproc_def(ths: &RenderObject, _: &Vec3) -> RenderColor{
 	ths.diffuse.clone()
 }
-fn ksproc_def(ths: &RenderObject, _: &POS3D) -> RenderColor{
+fn ksproc_def(ths: &RenderObject, _: &Vec3) -> RenderColor{
 	ths.specular.clone()
 }
 
@@ -124,7 +124,7 @@ pub const render_object_static_def: RenderObjectStatic = RenderObjectStatic{
 pub struct RenderObject{
 	vft: &'static RenderObjectStatic, /* virtual function table */
 	r: f32,			/* Radius */
-	org: POS3D,		/* Center */
+	org: Vec3,		/* Center */
 	diffuse: RenderColor, /* Diffuse(R,G,B) */
 	specular: RenderColor,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
@@ -138,7 +138,7 @@ pub type SOBJECT = RenderObject;
 impl RenderObject{
     pub fn new(
         vft: &'static RenderObjectStatic,
-        r: f32, org: POS3D,
+        r: f32, org: Vec3,
         diffuse: RenderColor,
         specular: RenderColor,
         pn: i32, t: f32, n: f32,
@@ -159,25 +159,25 @@ impl RenderObject{
 }
 
 pub struct RenderEnv{
-    pub cam: POS3D, /* camera position */
-    pub pyr: POS3D, /* camera direction in pitch yaw roll form */
+    pub cam: Vec3, /* camera position */
+    pub pyr: Vec3, /* camera direction in pitch yaw roll form */
     pub xres: i32,
     pub yres: i32,
     pub xfov: f32,
     pub yfov: f32,
     pub objects: Vec<SOBJECT>,
     pub nobj: i32,
-    pub light: POS3D,
-    pub vnm: POS3D,
-    pub bgproc: fn(pos: &POS3D, fcolor: &mut RenderColor)
+    pub light: Vec3,
+    pub vnm: Vec3,
+    pub bgproc: fn(pos: &Vec3, fcolor: &mut RenderColor)
 }
 
 type Mat4 = [[f32; 4]; 3];
 
 const MAT4IDENTITY: Mat4 = [[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.]];
 
-fn concat(m: &Mat4, v: &POS3D) -> POS3D{
-    POS3D{
+fn concat(m: &Mat4, v: &Vec3) -> Vec3{
+    Vec3{
         x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3],
         y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3],
         z: m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3],
@@ -239,7 +239,7 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
     for iy in 0..ren.yres {
         for ix in 0..ren.xres {
             let mut vi = ren.cam.clone();
-            let mut eye: POS3D = POS3D{ /* cast ray direction vector? */
+            let mut eye: Vec3 = Vec3{ /* cast ray direction vector? */
                 x: 1.,
                 y: (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
                 z: -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
@@ -255,7 +255,7 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 
 /* find first object the ray hits */
 /// @returns time at which ray intersects with a shape and its object id.
-fn raycast(ren: &RenderEnv, vi: &POS3D, eye: &POS3D,
+fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
     ig: Option<&SOBJECT>, flags: u32) -> (f32, usize)
 {
     let mut t = std::f32::INFINITY;
@@ -268,7 +268,7 @@ fn raycast(ren: &RenderEnv, vi: &POS3D, eye: &POS3D,
             }
         }
         /* calculate vector from eye position to the object's center. */
-        let wpt = POS3D::new(
+        let wpt = Vec3::new(
             vi.x - obj.org.x,
             vi.y - obj.org.y,
             vi.z - obj.org.z
@@ -297,7 +297,7 @@ fn raycast(ren: &RenderEnv, vi: &POS3D, eye: &POS3D,
         }
     }
 
-    let wpt = POS3D::new(
+    let wpt = Vec3::new(
         vi.x - ren.objects[0].org.x,
         vi.y - ren.objects[0].org.y,
         vi.z - ren.objects[0].org.z
@@ -315,11 +315,11 @@ fn raycast(ren: &RenderEnv, vi: &POS3D, eye: &POS3D,
 }
 
 /* calculate normalized normal vector */
-fn normal_vector(ren: &RenderEnv, idx: usize, pt: &POS3D) -> POS3D
+fn normal_vector(ren: &RenderEnv, idx: usize, pt: &Vec3) -> Vec3
 {
     if 0 == idx { ren.vnm.clone() }
     else{
-        POS3D::new(
+        Vec3::new(
             pt.x - ren.objects[idx].org.x,
             pt.y - ren.objects[idx].org.y,
             pt.z - ren.objects[idx].org.z
@@ -329,9 +329,9 @@ fn normal_vector(ren: &RenderEnv, idx: usize, pt: &POS3D) -> POS3D
 
 fn shading(ren: &mut RenderEnv,
             idx: usize,
-            n: &POS3D,
-            pt: &POS3D,
-            eye: &POS3D,
+            n: &Vec3,
+            pt: &Vec3,
+            eye: &Vec3,
             nest: i32) -> FCOLOR
 {
     // let mut lv: f32;
@@ -341,7 +341,7 @@ fn shading(ren: &mut RenderEnv,
         /* scalar product of light normal and surface normal */
         let light_incidence = ren.light.dot(n);
         let ln2 = 2.0 * light_incidence;
-        let reflected_ray_to_light_souce = POS3D::new(
+        let reflected_ray_to_light_souce = Vec3::new(
             ln2 * n.x - ren.light.x,
             ln2 * n.y - ren.light.y,
             ln2 * n.z - ren.light.z,
@@ -350,7 +350,7 @@ fn shading(ren: &mut RenderEnv,
         let eps = std::f32::EPSILON;
         (
             light_incidence.max(0.),
-            POS3D::new(
+            Vec3::new(
                 pt.x + ren.light.x * eps,
                 pt.y + ren.light.y * eps,
                 pt.z + ren.light.z * eps,
@@ -366,7 +366,7 @@ fn shading(ren: &mut RenderEnv,
 
     /* shadow trace */
     let (k1, k2) = {
-        let ray: POS3D = ren.light.clone();
+        let ray: Vec3 = ren.light.clone();
         let k1 = 0.2;
         let (t, _) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
         if t >= std::f32::INFINITY || 0. < ren.objects[idx].t {
@@ -393,13 +393,13 @@ fn shading(ren: &mut RenderEnv,
 
 		let fc2 = {
 			let reference = sp * (if sp > 0. { ren.objects[idx].n } else { 1. / ren.objects[idx].n } - 1.);
-            let mut ray = POS3D::new(
+            let mut ray = Vec3::new(
                 eye.x + reference * n.x,
                 eye.y + reference * n.y,
                 eye.z + reference * n.z
             ).normalized();
             let eps = std::f32::EPSILON;
-			let mut pt3 = POS3D::new(
+			let mut pt3 = Vec3::new(
                 pt.x + ray.x * eps,
                 pt.y + ray.y * eps,
                 pt.z + ray.z * eps,
@@ -409,7 +409,7 @@ fn shading(ren: &mut RenderEnv,
 /*		t = raycast(ren, &reflectedRay, &ray, &i, &ren->objects[idx], OUTONLY);
 		if(t < INFINITY)
 		{
-			POS3D n2;
+			Vec3 n2;
 			f = exp(-t / o->t);
 			normal(ren, i, &reflectedRay, &n2);
 			shading(ren, i, &n2, &reflectedRay, &ray, &fc2, nest+1);
@@ -434,7 +434,7 @@ fn shading(ren: &mut RenderEnv,
 }
 
 
-fn raytrace(ren: &mut RenderEnv, vi: &mut POS3D, eye: &mut POS3D,
+fn raytrace(ren: &mut RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
     mut lev: i32, mut flags: u32) -> FCOLOR
 {
     let fcs = FCOLOR::new(1., 1., 1.);
@@ -450,7 +450,7 @@ fn raytrace(ren: &mut RenderEnv, vi: &mut POS3D, eye: &mut POS3D,
 /*			t -= EPS;*/
 
 			/* shared point */
-            let mut pt = POS3D::zero();
+            let mut pt = Vec3::zero();
             pt.x = eye.x * t + vi.x;
             pt.y = eye.y * t + vi.y;
             pt.z = eye.z * t + vi.z;
