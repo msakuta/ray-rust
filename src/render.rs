@@ -139,7 +139,7 @@ impl render_object{
         frac: fcolor_t
     ) -> render_object {
         render_object{
-            vft: &render_object_static_def,
+            vft,
             r,
             org,
             kdr, kdg, kdb,
