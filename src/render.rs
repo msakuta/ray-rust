@@ -60,12 +60,20 @@ impl POS3D{
         Self::new(0., 0., 0.)
     }
 
-    fn SPROD(&self, b: &Self) -> f32 {
+    pub fn SPROD(&self, b: &Self) -> f32 {
         self.x*b.x
          + self.y*b.y
          + self.z*b.z
     } 
 
+    pub fn len(&self) -> f32 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
+
+    pub fn normalized(&self) -> Self {
+        let len = self.len();
+        POS3D::new(self.x / len, self.y / len, self.z / len)
+    }
 }
 
 fn floorkd(ths: &SOBJECT, pt: &POS3D, kd: &mut fcolor_t){
@@ -393,23 +401,17 @@ fn shading(ren: &mut RENDER,
 
 	/* refraction! */
 	if nest < MAXREFLAC && 0. < ren.objects[Idx].t {
-		let mut ray = POS3D::zero();
 		let mut fc2 = FCOLOR::new(0., 0., 0.);
-		let mut i: i32;
-		let mut t: f32;
-        let mut f: f32;
-		let mut sp = eye.SPROD(&n);
-		f = o.t;
-		fc2.fred = 0.;
-        fc2.fgreen = 0.;
-        fc2.fblue = 0.;
+		let sp = eye.SPROD(&n);
+		let f = o.t;
 
 		{
-			let mut reference = sp * (if sp > 0. { ren.objects[Idx].n } else { 1. / ren.objects[Idx].n } - 1.);
-			ray.x = eye.x + reference * n.x;
-			ray.y = eye.y + reference * n.y;
-			ray.z = eye.z + reference * n.z;
-			ray = NORMALIZE(&ray);
+			let reference = sp * (if sp > 0. { ren.objects[Idx].n } else { 1. / ren.objects[Idx].n } - 1.);
+            let mut ray = POS3D::new(
+                eye.x + reference * n.x,
+                eye.y + reference * n.y,
+                eye.z + reference * n.z
+            ).normalized();
             let EPS = std::f32::EPSILON;
 			let mut pt3 = POS3D::new(
                 pt.x + ray.x * EPS,
