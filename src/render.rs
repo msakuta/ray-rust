@@ -326,16 +326,15 @@ fn raycast(ren: &RENDER, vi: &POS3D, eye: &POS3D,
 }
 
 /* calculate normalized normal vector */
-fn normal(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
+fn normal_vector(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
 {
-	if 0 != Idx { ren.vnm.clone() }
+	if 0 == Idx { ren.vnm.clone() }
 	else{
-		NORMALIZE(&POS3D{
-            x: pt.x - ren.objects[Idx].org.x,
-            y: pt.y - ren.objects[Idx].org.y,
-            z: pt.z - ren.objects[Idx].org.z,
-            reserved: 0.
-        })
+        POS3D::new(
+            pt.x - ren.objects[Idx].org.x,
+            pt.y - ren.objects[Idx].org.y,
+            pt.z - ren.objects[Idx].org.z
+        ).normalized()
 	}
 }
 
@@ -471,7 +470,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
             pt.y = eye.y * t + vi.y;
             pt.z = eye.z * t + vi.z;
 
-			let n = normal(ren, idx,&pt);
+			let n = normal_vector(ren, idx, &pt);
 			let fc = shading(ren, idx,&n,&pt,eye, lev);
             if idx == 1 {
                 println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, fc);
