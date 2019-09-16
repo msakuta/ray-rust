@@ -328,8 +328,8 @@ fn raycast(ren: &RENDER, vi: &POS3D, eye: &POS3D,
 /* calculate normalized normal vector */
 fn normal_vector(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
 {
-	if 0 == Idx { ren.vnm.clone() }
-	else{
+    if 0 == Idx { ren.vnm.clone() }
+    else{
         POS3D::new(
             pt.x - ren.objects[Idx].org.x,
             pt.y - ren.objects[Idx].org.y,
@@ -339,20 +339,20 @@ fn normal_vector(ren: &RENDER, Idx: usize, pt: &POS3D) -> POS3D
 }
 
 fn shading(ren: &mut RENDER,
-			Idx: usize,
-			n: &POS3D,
-			pt: &POS3D,
-			eye: &POS3D,
-			nest: i32) -> FCOLOR
+            Idx: usize,
+            n: &POS3D,
+            pt: &POS3D,
+            eye: &POS3D,
+            nest: i32) -> FCOLOR
 {
     // let mut lv: f32;
-    let (ln, pt2, lv) = {
+    let (lightIncidence, reflectedRay, reflectionIntensity) = {
         let o = &ren.objects[Idx];
 
         /* scalar product of light normal and surface normal */
-        let ln = ren.light.SPROD(n);
-        let ln2 = 2.0 * ln;
-        let r = POS3D::new(
+        let lightIncidence = ren.light.SPROD(n);
+        let ln2 = 2.0 * lightIncidence;
+        let reflectedRayToLightSouce = POS3D::new(
             ln2 * n.x - ren.light.x,
             ln2 * n.y - ren.light.y,
             ln2 * n.z - ren.light.z,
@@ -360,15 +360,15 @@ fn shading(ren: &mut RENDER,
 
         let EPS = std::f32::EPSILON;
         (
-            if ln < 0.0 { 0.0 } else { ln },
+            lightIncidence.max(0.),
             POS3D::new(
                 pt.x + ren.light.x * EPS,
                 pt.y + ren.light.y * EPS,
                 pt.z + ren.light.z * EPS,
             ),
             if 0 != o.pn {
-                let lv = -r.SPROD(eye);
-                if lv > 0.0 { lv.powi(o.pn) }
+                let reflectionIncidence = -reflectedRayToLightSouce.SPROD(eye);
+                if reflectionIncidence > 0.0 { reflectionIncidence.powi(o.pn) }
                 else        { 0.0 }
             }
             else { 0. }
@@ -379,9 +379,9 @@ fn shading(ren: &mut RENDER,
     let (k1, k2) = {
         let ray: POS3D = ren.light.clone();
         let k1 = 0.2;
-        let (t, i) = raycast(ren, &pt2, &ray, Some(&ren.objects[Idx]), 0);
+        let (t, i) = raycast(ren, &reflectedRay, &ray, Some(&ren.objects[Idx]), 0);
         if t >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
-            (k1 + ln, lv)
+            (k1 + lightIncidence, reflectionIntensity)
         }
         else {
             (0., 0.)
@@ -419,13 +419,13 @@ fn shading(ren: &mut RENDER,
             );
 			raytrace(ren, &mut pt3, &mut ray, &mut fc2, nest, if sp < 0. { OUTONLY } else { INONLY });
 		}
-/*		t = raycast(ren, &pt2, &ray, &i, &ren->objects[Idx], OUTONLY);
+/*		t = raycast(ren, &reflectedRay, &ray, &i, &ren->objects[Idx], OUTONLY);
 		if(t < INFINITY)
 		{
 			POS3D n2;
 			f = exp(-t / o->t);
-			normal(ren, i, &pt2, &n2);
-			shading(ren, i, &n2, &pt2, &ray, &fc2, nest+1);
+			normal(ren, i, &reflectedRay, &n2);
+			shading(ren, i, &n2, &reflectedRay, &ray, &fc2, nest+1);
 		}
 		else{
 			f = 0;
