@@ -257,70 +257,64 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 
 
 /* find first object the ray hits */
-fn raycast(ren: &mut RENDER, vi: &POS3D, eye: &POS3D, pIdx: &mut usize,
-    ig: Option<&SOBJECT>, flags: u32) -> f32
+/// @returns time at which ray intersects with a shape and its object id.
+fn raycast(ren: &mut RENDER, vi: &POS3D, eye: &POS3D,
+    ig: Option<&SOBJECT>, flags: u32) -> (f32, usize)
 {
-	let mut Idx: i32;
-	let mut t0: f32;
-    let mut w: f32;
-    let mut t: f32;
-    let mut wpt = POS3D{x: 0., y: 0., z: 0., reserved: 0.};
+    let mut t = std::f32::INFINITY;
+    let mut ret_idx = 0;
 
-	t = std::f32::INFINITY;
-
-	for (Idx, obj) in ren.objects.iter_mut().enumerate() {
+	for (idx, obj) in ren.objects.iter_mut().enumerate() {
         if let Some(ignore_obj) = ig {
             if ignore_obj as *const _ == obj as *const _ {
                 continue;
             }
         }
-        {
-            let mut b: f32;
-            let mut c: f32;
-            let mut d: f32;
+        /* calculate vector from eye position to the object's center. */
+        let wpt = POS3D::new(
+            vi.x - obj.org.x,
+            vi.y - obj.org.y,
+            vi.z - obj.org.z
+        );
 
-            /* calculate vector from eye position to the object's center. */
-            wpt.x = vi.x - obj.org.x;
-            wpt.y = vi.y - obj.org.y;
-            wpt.z = vi.z - obj.org.z;
+        /* scalar product of the ray and the vector. */
+        let b = 2.0f32 * (eye.x * wpt.x + eye.y * wpt.y + eye.z * wpt.z);
 
-            /* scalar product of the ray and the vector. */
-            b = 2.0f32 * (eye.x * wpt.x + eye.y * wpt.y + eye.z * wpt.z);
+        /* ??? */
+        let c = wpt.x * wpt.x + wpt.y * wpt.y + wpt.z * wpt.z -
+                obj.r * obj.r;
 
-            /* ??? */
-            c = wpt.x * wpt.x + wpt.y * wpt.y + wpt.z * wpt.z -
-                    obj.r * obj.r;
-
-            /* discriminant?? */
-            d = b * b - 4.0f32 * c;
-            if d >= std::f32::EPSILON {
-                d = d.sqrt();
-                t0 = (-b - d) as f32 / 2.0f32;
-                if 0 == (flags & OUTONLY) && t0 >= 0.0f32 && t0 < t {
-                    t = t0;
-                    *pIdx = Idx;
-                }
-                else if 0 == (flags & INONLY) && 0f32 < (t0 + d) && t0 + d < t {
-                    t = t0 + d;
-                    *pIdx = Idx;
-                }
+        /* discriminant?? */
+        let d2 = b * b - 4.0f32 * c;
+        if d2 >= std::f32::EPSILON {
+            let d = d2.sqrt();
+            let t0 = (-b - d) as f32 / 2.0f32;
+            if 0 == (flags & OUTONLY) && t0 >= 0.0f32 && t0 < t {
+                t = t0;
+                ret_idx = idx;
+            }
+            else if 0 == (flags & INONLY) && 0f32 < (t0 + d) && t0 + d < t {
+                t = t0 + d;
+                ret_idx = idx;
             }
         }
     }
 
-	wpt.x = vi.x - ren.objects[0].org.x;
-	wpt.y = vi.y - ren.objects[0].org.y;
-	wpt.z = vi.z - ren.objects[0].org.z;
-	w = ren.vnm.x * eye.x + ren.vnm.y * eye.y + ren.vnm.z * eye.z;
+    let wpt = POS3D::new(
+        vi.x - ren.objects[0].org.x,
+        vi.y - ren.objects[0].org.y,
+        vi.z - ren.objects[0].org.z
+    );
+	let w = ren.vnm.x * eye.x + ren.vnm.y * eye.y + ren.vnm.z * eye.z;
 	if /*fabs(w) > 1.0e-7*/ w <= 0. {
-		t0 = (-ren.vnm.x * wpt.x - ren.vnm.y * wpt.y - ren.vnm.z * wpt.z) / w;
+		let t0 = (-ren.vnm.x * wpt.x - ren.vnm.y * wpt.y - ren.vnm.z * wpt.z) / w;
 		if t0 >= 0. && t0 < t {
 			t = t0;
-			*pIdx = 0;
+			ret_idx = 0;
 		}
 	}
 
-	return t;
+	(t, ret_idx)
 }
 
 /* calculate normalized normal vector */
@@ -378,8 +372,8 @@ fn shading(ren: &mut RENDER,
     let (k1, k2) = {
         let ray: POS3D = ren.light.clone();
         let k1 = 0.2;
-        let mut i = Idx;
-        if raycast(ren, &pt2,&ray,&mut i,None /*Some(&ren.objects[Idx])*/, 0) >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
+        let (t, i) = raycast(ren, &pt2, &ray, None /*Some(&ren.objects[Idx])*/, 0);
+        if t >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
             (k1 + ln, lv)
         }
         else {
@@ -455,10 +449,7 @@ fn shading(ren: &mut RENDER,
 fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOLOR,
     mut lev: i32, mut flags: u32)
 {
-	let mut Idx: usize = 0;
-	let mut t: f32;
     let mut en2: f32;
-	let mut fc = FCOLOR::new(0., 0., 0.);
     let mut fcs = FCOLOR::new(0., 0., 0.);
 	let mut ig: Option<&SOBJECT> = None;
 
@@ -472,7 +463,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
 
 	loop {
 		lev += 1;
-		t = raycast(ren, vi, eye, &mut Idx, ig, flags);
+		let (t, idx) = raycast(ren, vi, eye, ig, flags);
 		if (t < std::f32::INFINITY){
 			let mut ks = fcolor_t::new(0., 0., 0.);
 /*			t -= EPS;*/
@@ -483,11 +474,13 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
             pt.y = eye.y * t + vi.y;
             pt.z = eye.z * t + vi.z;
 
-			let n = normal(ren, Idx,&pt);
-			fc = shading(ren, Idx,&n,&pt,eye, lev);
-            println!("Hit something: {} eye: {:?} normal: {:?} shading: {:?}", Idx, eye, n, fc);
+			let n = normal(ren, idx,&pt);
+			let fc = shading(ren, idx,&n,&pt,eye, lev);
+            if idx == 1 {
+                println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, fc);
+            }
 
-			let o: &SOBJECT = &ren.objects[Idx];
+			let o: &SOBJECT = &ren.objects[idx];
 			(o.vft.ksproc)(o, &pt, &mut ks);
 			// else{
 			// 	ks.r = o.ksr;
