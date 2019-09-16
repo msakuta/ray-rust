@@ -15,24 +15,10 @@ const INONLY: u32 = (1<<1);
 // const BONLY: u32 = (RIGNORE|GIGNORE);
 
 #[derive(Debug, Clone)]
-pub struct FCOLOR{
-	pub fred: f32,
-	pub fgreen: f32,
-	pub fblue: f32,
-//	reserved: f32;
-}
-
-impl FCOLOR{
-    pub fn new(r: f32, g: f32, b: f32) -> Self {
-        Self{fred: r, fgreen: g, fblue: b}
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct RenderColor{
-	r: f32,
-    g: f32,
-    b: f32/*, _*/
+    pub r: f32,
+    pub g: f32,
+    pub b: f32/*, _*/
 }
 
 impl RenderColor{
@@ -201,7 +187,7 @@ fn matcat(m1: &Mat4, m2: &Mat4) -> Mat4{
 
 
 
-pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
+pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)) {
 	let mut view: Mat4 = MAT4IDENTITY;
 
 	ren.light.normalize();
@@ -332,7 +318,7 @@ fn shading(ren: &mut RenderEnv,
             n: &Vec3,
             pt: &Vec3,
             eye: &Vec3,
-            nest: i32) -> FCOLOR
+            nest: i32) -> RenderColor
 {
     // let mut lv: f32;
     let (diffuse_intensity, reflected_ray, reflection_intensity) = {
@@ -418,28 +404,28 @@ fn shading(ren: &mut RenderEnv,
 			f = 0;
 			ren->bgproc(&ray, &fc2);
 		}*/
-        FCOLOR{
-            fred: (kd.r * k1 + k2) * (1. - f) + fc2.fred * f,
-            fgreen: (kd.g * k1 + k2) * (1. - f) + fc2.fgreen * f,
-            fblue: (kd.b * k1 + k2) * (1. - f) + fc2.fblue * f,
+        RenderColor{
+            r: (kd.r * k1 + k2) * (1. - f) + fc2.r * f,
+            g: (kd.g * k1 + k2) * (1. - f) + fc2.g * f,
+            b: (kd.b * k1 + k2) * (1. - f) + fc2.b * f,
         }
 	}
 	else{
-		FCOLOR{
-            fred: kd.r * k1 + k2,
-            fgreen: kd.g * k1 + k2,
-            fblue: kd.b * k1 + k2,
+		RenderColor{
+            r: kd.r * k1 + k2,
+            g: kd.g * k1 + k2,
+            b: kd.b * k1 + k2,
         }
 	}
 }
 
 
 fn raytrace(ren: &mut RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
-    mut lev: i32, mut flags: u32) -> FCOLOR
+    mut lev: i32, mut flags: u32) -> RenderColor
 {
-    let fcs = FCOLOR::new(1., 1., 1.);
+    let fcs = RenderColor::new(1., 1., 1.);
 
-	let mut ret_color = FCOLOR::new(0., 0., 0.);
+	let mut ret_color = RenderColor::new(0., 0., 0.);
 /*	bgcolor(eye, pColor);*/
 
     let mut ig: Option<&SOBJECT> = None;
@@ -474,7 +460,7 @@ fn raytrace(ren: &mut RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 			// if(0 != (BIGNORE & flags)) { pColor.fblue	+= fc.fblue * fcs.fblue; fcs.fblue	*= ks.b; }
             ret_color = fc.clone();
 
-			if (fcs.fred + fcs.fgreen + fcs.fblue) <= 0.1 {
+			if (fcs.r + fcs.g + fcs.b) <= 0.1 {
 				break;
             }
 
@@ -500,9 +486,9 @@ fn raytrace(ren: &mut RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 		else{
 			let mut fc2 = RenderColor::new(0., 0., 0.);
 			(ren.bgproc)(eye, &mut fc2);
-			ret_color.fred	+= fc2.r * fcs.fred;
-			ret_color.fgreen	+= fc2.g * fcs.fgreen;
-			ret_color.fblue	+= fc2.b * fcs.fblue;
+			ret_color.r	+= fc2.r * fcs.r;
+			ret_color.g	+= fc2.g * fcs.g;
+			ret_color.b	+= fc2.b * fcs.b;
 		}
         if !(t < std::f32::INFINITY && lev < MAXLEVEL) {
             break;

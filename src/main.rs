@@ -7,7 +7,7 @@ use image::ColorType;
 
 mod render;
 
-use render::{Vec3, RenderColor, FCOLOR, floor_static, render_object_static_def, SOBJECT, RenderEnv, render};
+use render::{Vec3, RenderColor, floor_static, render_object_static_def, SOBJECT, RenderEnv, render};
 
 
 
@@ -43,10 +43,10 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    let mut putpoint = |x: i32, y: i32, fc: &FCOLOR| {
-        data[(x as usize + y as usize * width) * 3 + 0] = (fc.fred * 255.).min(255.) as u8;
-        data[(x as usize + y as usize * width) * 3 + 1] = (fc.fgreen * 255.).min(255.) as u8;
-        data[(x as usize + y as usize * width) * 3 + 2] = (fc.fblue * 255.).min(255.) as u8;
+    let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
+        data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
         // PutPointWin(&wg, x, ren.yres - y,
         //     RGB((BYTE )(fc->fred > 1.F ? 255 : fc->fred * 255),
         //         (BYTE )(fc->fgreen > 1.F ? 255 : fc->fgreen * 255),
