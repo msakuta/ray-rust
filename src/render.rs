@@ -258,13 +258,13 @@ pub fn render(ren: &mut RENDER, pointproc: &mut FnMut(i32, i32, &FCOLOR)) {
 
 /* find first object the ray hits */
 /// @returns time at which ray intersects with a shape and its object id.
-fn raycast(ren: &mut RENDER, vi: &POS3D, eye: &POS3D,
+fn raycast(ren: &RENDER, vi: &POS3D, eye: &POS3D,
     ig: Option<&SOBJECT>, flags: u32) -> (f32, usize)
 {
     let mut t = std::f32::INFINITY;
     let mut ret_idx = 0;
 
-	for (idx, obj) in ren.objects.iter_mut().enumerate() {
+	for (idx, obj) in ren.objects.iter().enumerate() {
         if let Some(ignore_obj) = ig {
             if ignore_obj as *const _ == obj as *const _ {
                 continue;
@@ -372,7 +372,7 @@ fn shading(ren: &mut RENDER,
     let (k1, k2) = {
         let ray: POS3D = ren.light.clone();
         let k1 = 0.2;
-        let (t, i) = raycast(ren, &pt2, &ray, None /*Some(&ren.objects[Idx])*/, 0);
+        let (t, i) = raycast(ren, &pt2, &ray, Some(&ren.objects[Idx]), 0);
         if t >= std::f32::INFINITY || 0. < ren.objects[Idx].t {
             (k1 + ln, lv)
         }
@@ -449,22 +449,17 @@ fn shading(ren: &mut RENDER,
 fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOLOR,
     mut lev: i32, mut flags: u32)
 {
-    let mut en2: f32;
-    let mut fcs = FCOLOR::new(0., 0., 0.);
-	let mut ig: Option<&SOBJECT> = None;
+    let mut fcs = FCOLOR::new(1., 1., 1.);
 
 	pColor.fred = 0.;
     pColor.fgreen = 0.;
     pColor.fblue = 0.0;
 /*	bgcolor(eye, pColor);*/
-	fcs.fred = 0.;
-    fcs.fgreen = 0.;
-    fcs.fblue = 1.0;
 
 	loop {
 		lev += 1;
-		let (t, idx) = raycast(ren, vi, eye, ig, flags);
-		if (t < std::f32::INFINITY){
+		let (t, idx) = raycast(ren, vi, eye, None, flags);
+		if t < std::f32::INFINITY {
 			let mut ks = fcolor_t::new(0., 0., 0.);
 /*			t -= EPS;*/
 
@@ -502,7 +497,7 @@ fn raytrace(ren: &mut RENDER, vi: &mut POS3D, eye: &mut POS3D, pColor: &mut FCOL
             }
 
 			*vi = pt.clone();
-			en2 = 2.0 * (-eye.x * n.x - eye.y * n.y - eye.z * n.z);
+			let en2 = 2.0 * (-eye.x * n.x - eye.y * n.y - eye.z * n.z);
 			eye.x += en2 * n.x; eye.y += en2 * n.y; eye.z += en2 * n.z;
 
 			if(n.SPROD(&eye) < 0.) {
