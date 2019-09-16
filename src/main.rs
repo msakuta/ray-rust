@@ -16,7 +16,7 @@ fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     println!("{:?}", args);
 
-    let (WIDTH, HEIGHT): (usize, usize) = {
+    let (width, height): (usize, usize) = {
         let mut width = 256;
         let mut height = 256;
         if 1 < args.len() {
@@ -28,27 +28,25 @@ fn main() -> std::io::Result<()> {
         (width, height)
     };
 
-    let XRES: usize = WIDTH / 2/*WIDTH*//*320*/;
-    let YRES: usize = HEIGHT / 2/*HEIGHT*//*200*/;
-    let XMAX: usize = WIDTH/*	((XRES + 1) * 2)*/;
-    let YMAX: usize = HEIGHT/*	((YRES + 1) * 2)*/;
-    let XFOV: f32 = 1.;
-    let YFOV: f32 = (YMAX as f32 / XMAX as f32);
+    let xmax: usize = width/*	((XRES + 1) * 2)*/;
+    let ymax: usize = height/*	((YRES + 1) * 2)*/;
+    let xfov: f32 = 1.;
+    let yfov: f32 = ymax as f32 / xmax as f32;
 
-    let mut data = vec![0u8; 3 * WIDTH * HEIGHT];
+    let mut data = vec![0u8; 3 * width * height];
 
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            data[(x + y * WIDTH) * 3 + 0] = ((x) * 255 / WIDTH) as u8;
-            data[(x + y * WIDTH) * 3 + 1] = ((y) * 255 / HEIGHT) as u8;
-            data[(x + y * WIDTH) * 3 + 2] = ((x + y) % 32 + 32) as u8;
+    for y in 0..height {
+        for x in 0..width {
+            data[(x + y * width) * 3 + 0] = ((x) * 255 / width) as u8;
+            data[(x + y * width) * 3 + 1] = ((y) * 255 / height) as u8;
+            data[(x + y * width) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &FCOLOR| {
-        data[(x as usize + y as usize * WIDTH) * 3 + 0] = (fc.fred * 255.).min(255.) as u8;
-        data[(x as usize + y as usize * WIDTH) * 3 + 1] = (fc.fgreen * 255.).min(255.) as u8;
-        data[(x as usize + y as usize * WIDTH) * 3 + 2] = (fc.fblue * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3 + 0] = (fc.fred * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3 + 1] = (fc.fgreen * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3 + 2] = (fc.fblue * 255.).min(255.) as u8;
         // PutPointWin(&wg, x, ren.yres - y,
         //     RGB((BYTE )(fc->fred > 1.F ? 255 : fc->fred * 255),
         //         (BYTE )(fc->fgreen > 1.F ? 255 : fc->fgreen * 255),
@@ -67,7 +65,7 @@ fn main() -> std::io::Result<()> {
     /*	{&render_object_static_def,  100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
     };
 
-    fn bgcolor(pos: &POS3D, fcolor: &mut RenderColor){
+    fn bgcolor(_pos: &POS3D, fcolor: &mut RenderColor){
         *fcolor = RenderColor::new(0., 0.25, 0.);
     }
 
@@ -77,10 +75,10 @@ fn main() -> std::io::Result<()> {
     let mut ren: RenderEnv = RenderEnv{
         cam: POS3D::new(0., -150., -300.), /* cam */
         pyr: POS3D::new(0., -PI / 2., -PI / 2.), /* pyr */
-        xres: XMAX as i32,
-        yres: YMAX as i32, /* xres, yres */
-        xfov: XFOV,
-        yfov: YFOV, /* xfov, yfov*/
+        xres: xmax as i32,
+        yres: ymax as i32, /* xres, yres */
+        xfov: xfov,
+        yfov: yfov, /* xfov, yfov*/
         //pointproc: putpoint, /* pointproc */
         objects,
         nobj: num_objects as i32, /* objects, nobj */
@@ -93,5 +91,5 @@ fn main() -> std::io::Result<()> {
     let buffer = File::create("foo.png")?;
     let encoder = PNGEncoder::new(buffer);
 
-    encoder.encode(&data, WIDTH as u32, HEIGHT as u32, ColorType::RGB(8))
+    encoder.encode(&data, width as u32, height as u32, ColorType::RGB(8))
 }
