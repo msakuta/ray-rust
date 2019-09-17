@@ -88,26 +88,6 @@ impl Mul<f32> for &Vec3{
     }
 }
 
-// Unlike C++, Rust doesn't have implicit conversion from mutable
-// reference to immutable reference.
-// One way to deal with this is to define operators for each of
-// mutable and immutable references, which is tedious.
-// impl Mul<f32> for &mut Vec3{
-//     type Output = Vec3;
-
-//     fn mul(self, o: f32) -> Vec3{
-//         (self as &Vec3) * o
-//     }
-// }
-
-// And the other way is to define type conversion from &mut to &
-// using Into or From traits, which didn't work for me.
-// impl<'a> Into<&'a Vec3> for &'a mut Vec3{
-//     fn into(self) -> &'a Vec3{
-//         &*self
-//     }
-// }
-
 impl Add for &Vec3{
     type Output = Vec3;
 
