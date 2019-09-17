@@ -1,4 +1,6 @@
 
+use std::ops::{Add, AddAssign, Sub, Mul};
+// use std::convert::Into;
 
 
 pub const MAXLEVEL: i32 = 1;
@@ -27,7 +29,7 @@ impl RenderColor{
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct Vec3{
 	x: f32,
 	y: f32,
@@ -61,11 +63,75 @@ impl Vec3{
 
     pub fn normalize(&mut self){
         let len = self.len();
-        self.x /= len;
-        self.y /= len;
-        self.z /= len;
+        self.scale(1. / len);
+    }
+
+    pub fn scaled(&self, o: f32) -> Self{
+        Self::new(self.x * o, self.y * o, self.z * o)
+    }
+
+    pub fn scale(&mut self, o: f32){
+        self.x *= o;
+        self.y *= o;
+        self.z *= o;
     }
 }
+
+// It's a shame that we cannot omit '&' in front of Vec3 object
+// if we want to use multiplication operator (*).
+// Another option is to call like v1.mul(v2), but it's ugly too.
+impl Mul<f32> for &Vec3{
+    type Output = Vec3;
+
+    fn mul(self, o: f32) -> Vec3{
+        Vec3::new(self.x * o, self.y * o, self.z * o)
+    }
+}
+
+// Unlike C++, Rust doesn't have implicit conversion from mutable
+// reference to immutable reference.
+// One way to deal with this is to define operators for each of
+// mutable and immutable references, which is tedious.
+// impl Mul<f32> for &mut Vec3{
+//     type Output = Vec3;
+
+//     fn mul(self, o: f32) -> Vec3{
+//         (self as &Vec3) * o
+//     }
+// }
+
+// And the other way is to define type conversion from &mut to &
+// using Into or From traits, which didn't work for me.
+// impl<'a> Into<&'a Vec3> for &'a mut Vec3{
+//     fn into(self) -> &'a Vec3{
+//         &*self
+//     }
+// }
+
+impl Add for &Vec3{
+    type Output = Vec3;
+
+    fn add(self, o: Self) -> Vec3{
+        Vec3::new(self.x + o.x, self.y + o.y, self.z + o.z)
+    }
+}
+
+impl AddAssign for Vec3{
+    fn add_assign(&mut self, o: Vec3){
+        self.x += o.x;
+        self.y += o.y;
+        self.z += o.z;
+    }
+}
+
+impl Sub for &Vec3{
+    type Output = Vec3;
+
+    fn sub(self, o: Self) -> Vec3{
+        Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
+    }
+}
+
 
 fn floorkd(ths: &SOBJECT, pt: &Vec3) -> RenderColor{
     RenderColor::new(
@@ -254,18 +320,13 @@ fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
             }
         }
         /* calculate vector from eye position to the object's center. */
-        let wpt = Vec3::new(
-            vi.x - obj.org.x,
-            vi.y - obj.org.y,
-            vi.z - obj.org.z
-        );
+        let wpt = vi - &obj.org;
 
         /* scalar product of the ray and the vector. */
-        let b = 2.0f32 * (eye.x * wpt.x + eye.y * wpt.y + eye.z * wpt.z);
+        let b = 2.0f32 * eye.dot(&wpt);
 
         /* ??? */
-        let c = wpt.x * wpt.x + wpt.y * wpt.y + wpt.z * wpt.z -
-                obj.r * obj.r;
+        let c = wpt.dot(&wpt) - obj.r * obj.r;
 
         /* discriminant?? */
         let d2 = b * b - 4.0f32 * c;
@@ -283,14 +344,10 @@ fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
         }
     }
 
-    let wpt = Vec3::new(
-        vi.x - ren.objects[0].org.x,
-        vi.y - ren.objects[0].org.y,
-        vi.z - ren.objects[0].org.z
-    );
-	let w = ren.vnm.x * eye.x + ren.vnm.y * eye.y + ren.vnm.z * eye.z;
+    let wpt = vi - &ren.objects[0].org;
+	let w = ren.vnm.dot(eye);
 	if /*fabs(w) > 1.0e-7*/ w <= 0. {
-		let t0 = (-ren.vnm.x * wpt.x - ren.vnm.y * wpt.y - ren.vnm.z * wpt.z) / w;
+		let t0 = (-ren.vnm.dot(&wpt)) / w;
 		if t0 >= 0. && t0 < t {
 			t = t0;
 			ret_idx = 0;
@@ -305,11 +362,7 @@ fn normal_vector(ren: &RenderEnv, idx: usize, pt: &Vec3) -> Vec3
 {
     if 0 == idx { ren.vnm.clone() }
     else{
-        Vec3::new(
-            pt.x - ren.objects[idx].org.x,
-            pt.y - ren.objects[idx].org.y,
-            pt.z - ren.objects[idx].org.z
-        ).normalized()
+        (pt - &ren.objects[idx].org).normalized()
 	}
 }
 
@@ -327,22 +380,14 @@ fn shading(ren: &RenderEnv,
         /* scalar product of light normal and surface normal */
         let light_incidence = ren.light.dot(n);
         let ln2 = 2.0 * light_incidence;
-        let reflected_ray_to_light_souce = Vec3::new(
-            ln2 * n.x - ren.light.x,
-            ln2 * n.y - ren.light.y,
-            ln2 * n.z - ren.light.z,
-        );
+        let reflected_ray_to_light_source = &(n * ln2) - &ren.light;
 
         let eps = std::f32::EPSILON;
         (
             light_incidence.max(0.),
-            Vec3::new(
-                pt.x + ren.light.x * eps,
-                pt.y + ren.light.y * eps,
-                pt.z + ren.light.z * eps,
-            ),
+            pt + &(&ren.light * eps),
             if 0 != o.pn {
-                let reflection_incidence = -reflected_ray_to_light_souce.dot(eye);
+                let reflection_incidence = -reflected_ray_to_light_source.dot(eye);
                 if reflection_incidence > 0.0 { reflection_incidence.powi(o.pn) }
                 else        { 0.0 }
             }
@@ -379,17 +424,9 @@ fn shading(ren: &RenderEnv,
 
 		let fc2 = {
 			let reference = sp * (if sp > 0. { ren.objects[idx].n } else { 1. / ren.objects[idx].n } - 1.);
-            let mut ray = Vec3::new(
-                eye.x + reference * n.x,
-                eye.y + reference * n.y,
-                eye.z + reference * n.z
-            ).normalized();
+            let mut ray = (eye + &(n * reference)).normalized();
             let eps = std::f32::EPSILON;
-			let mut pt3 = Vec3::new(
-                pt.x + ray.x * eps,
-                pt.y + ray.y * eps,
-                pt.z + ray.z * eps,
-            );
+			let mut pt3 = pt + &(&ray * eps);
             raytrace(ren, &mut pt3, &mut ray, nest, if sp < 0. { OUTONLY } else { INONLY })
 		};
 /*		t = raycast(ren, &reflectedRay, &ray, &i, &ren->objects[idx], OUTONLY);
@@ -436,10 +473,8 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 /*			t -= EPS;*/
 
 			/* shared point */
-            let mut pt = Vec3::zero();
-            pt.x = eye.x * t + vi.x;
-            pt.y = eye.y * t + vi.y;
-            pt.z = eye.z * t + vi.z;
+            // What a terrible formula... it's almost impractical to use it everywhere.
+            let pt = &(&*eye * t) + vi;
 
 			let n = normal_vector(ren, idx, &pt);
 			let fc = shading(ren, idx,&n,&pt,eye, lev);
@@ -469,8 +504,8 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             }
 
 			*vi = pt.clone();
-			let en2 = 2.0 * (-eye.x * n.x - eye.y * n.y - eye.z * n.z);
-			eye.x += en2 * n.x; eye.y += en2 * n.y; eye.z += en2 * n.z;
+			let en2 = -2.0 * eye.dot(&n);
+			*eye += &n * en2;
 
 			if n.dot(&eye) < 0. {
                 flags &= !INONLY;
