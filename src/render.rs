@@ -221,7 +221,7 @@ pub struct RenderEnv{
     pub nobj: i32,
     pub light: Vec3,
     pub vnm: Vec3,
-    pub bgproc: fn(pos: &Vec3, fcolor: &mut RenderColor)
+    pub bgproc: fn(pos: &Vec3) -> RenderColor
 }
 
 type Mat4 = [[f32; 4]; 3];
@@ -519,8 +519,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 			ig = Some(&ren.objects[idx]);
 		}
 		else{
-			let mut fc2 = RenderColor::new(0., 0., 0.);
-			(ren.bgproc)(eye, &mut fc2);
+			let fc2 = (ren.bgproc)(eye);
 			ret_color.r	+= fc2.r * fcs.r;
 			ret_color.g	+= fc2.g * fcs.g;
 			ret_color.b	+= fc2.b * fcs.b;

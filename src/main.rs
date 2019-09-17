@@ -65,8 +65,8 @@ fn main() -> std::io::Result<()> {
     /*	{&render_object_static_def,  100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
     };
 
-    fn bgcolor(_pos: &Vec3, fcolor: &mut RenderColor){
-        *fcolor = RenderColor::new(0., 0.25, 0.);
+    fn bgcolor(_pos: &Vec3) -> RenderColor{
+        RenderColor::new(0., 0.25, 0.)
     }
 
     let num_objects = objects.len();
