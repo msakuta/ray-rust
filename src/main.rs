@@ -65,13 +65,41 @@ fn main() -> std::io::Result<()> {
     /*	{&render_object_static_def,  100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
     };
 
-    fn bgcolor(_pos: &Vec3) -> RenderColor{
-        RenderColor::new(0., 0.25, 0.)
+    use std::f32::consts::PI;
+
+    fn bgcolor(ren: &RenderEnv, direction: &Vec3) -> RenderColor{
+        let phi = direction.z.atan2(direction.x);
+        let the = direction.y.asin();
+        let d = (50. * PI + phi * 10. * PI) % (2. * PI) - PI;
+        let dd = (50. * PI + the * 10. * PI) % (2. * PI) - PI;
+        let ret = RenderColor::new(
+            0.5 / (15. * (d * d * dd * dd) + 1.),
+            0.25 - direction.y / 4.,
+            0.25 - direction.y / 4.,
+        );
+        let dot = ren.light.dot(direction);
+
+        if dot > 0.9 {
+            if 0.9995 < dot {
+                RenderColor::new(2., 2., 2.)
+            }
+            else {
+                let ret2 = if 0.995 < dot {
+                    let dd = (d - 0.995) * 150.;
+                    RenderColor::new(ret.r + dd, ret.g + dd, ret.b + dd)
+                } else { ret };
+                let dot2 = dot - 0.9;
+                RenderColor::new(ret2.r + dot2 * 5., ret2.g + dot2 * 5., ret2.b)
+            }
+        }
+        else {
+            ret
+        }
+        // else PointMandel(dir->x * 2., dir->z * 2., 32, ret);
     }
 
     let num_objects = objects.len();
 
-    use std::f32::consts::PI;
     let mut ren: RenderEnv = RenderEnv{
         cam: Vec3::new(0., -150., -300.), /* cam */
         pyr: Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */

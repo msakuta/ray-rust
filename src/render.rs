@@ -2,16 +2,15 @@
 use std::ops::{Add, AddAssign, Sub, Mul};
 // use std::convert::Into;
 
-
-pub const MAXLEVEL: i32 = 1;
+pub const MAXLEVEL: i32 = 2;
 pub const MAXREFLAC: i32 = 10;
 
 
 const OUTONLY: u32 = (1<<0);
 const INONLY: u32 = (1<<1);
-// const RIGNORE: u32 = (1<<2);
-// const GIGNORE: u32 = (1<<3);
-// const BIGNORE: u32 = (1<<4);
+const RIGNORE: u32 = (1<<2);
+const GIGNORE: u32 = (1<<3);
+const BIGNORE: u32 = (1<<4);
 // const RONLY: u32 = (GIGNORE|BIGNORE);
 // const GONLY: u32 = (RIGNORE|BIGNORE);
 // const BONLY: u32 = (RIGNORE|GIGNORE);
@@ -31,9 +30,9 @@ impl RenderColor{
 
 #[derive(Clone, Debug, Copy)]
 pub struct Vec3{
-	x: f32,
-	y: f32,
-	z: f32,
+	pub x: f32,
+	pub y: f32,
+	pub z: f32,
 	reserved: f32,
 }
 
@@ -117,7 +116,7 @@ fn floorkd(ths: &SOBJECT, pt: &Vec3) -> RenderColor{
     RenderColor::new(
         (50. + (pt.x - ths.org.x) / 300.) % 1.,
         (50. + (pt.z - ths.org.z) / 300.) % 1.,
-        1.
+        0.
     )
 /*	{
 	double d, dd;
@@ -161,8 +160,8 @@ pub struct RenderObject{
 	specular: RenderColor,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
 	t: f32, /* transparency, unit length per decay */
-	n: f32, /* reflaction constant */
-	frac: RenderColor /* reflaction per spectrum */
+	n: f32, /* refraction constant */
+	frac: RenderColor /* refraction per spectrum */
 }
 
 pub type SOBJECT = RenderObject;
@@ -201,7 +200,7 @@ pub struct RenderEnv{
     pub nobj: i32,
     pub light: Vec3,
     pub vnm: Vec3,
-    pub bgproc: fn(pos: &Vec3) -> RenderColor
+    pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
 }
 
 type Mat4 = [[f32; 4]; 3];
@@ -440,7 +439,7 @@ fn shading(ren: &RenderEnv,
 fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
     mut lev: i32, mut flags: u32) -> RenderColor
 {
-    let fcs = RenderColor::new(1., 1., 1.);
+    let mut fcs = RenderColor::new(1., 1., 1.);
 
 	let mut ret_color = RenderColor::new(0., 0., 0.);
 /*	bgcolor(eye, pColor);*/
@@ -452,28 +451,23 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 		if t < std::f32::INFINITY {
 /*			t -= EPS;*/
 
-			/* shared point */
+            /* shared point */
             // What a terrible formula... it's almost impractical to use it everywhere.
             let pt = &(&*eye * t) + vi;
 
-			let n = normal_vector(ren, idx, &pt);
-			let fc = shading(ren, idx,&n,&pt,eye, lev);
+            let n = normal_vector(ren, idx, &pt);
+            let face_color = shading(ren, idx,&n,&pt,eye, lev);
             // if idx == 2 {
-            //     println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, fc);
+            //     println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, face_color);
             // }
 
-			// let o: &SOBJECT = &ren.objects[idx];
-			// let ks = (o.vft.ksproc)(o, &pt);
-			// else{
-			// 	ks.r = o.ksr;
-			// 	ks.g = o.ksg;
-			// 	ks.b = o.ksb;
-			// }
+            let o: &SOBJECT = &ren.objects[idx];
+            let ks = (o.vft.ksproc)(o, &pt);
 
-			// if(0 != (RIGNORE & flags)) { pColor.fred	+= fc.fred * fcs.fred; fcs.fred	*= ks.r; }
-			// if(0 != (GIGNORE & flags)) { pColor.fgreen	+= fc.fgreen * fcs.fgreen; fcs.fgreen	*= ks.g; }
-			// if(0 != (BIGNORE & flags)) { pColor.fblue	+= fc.fblue * fcs.fblue; fcs.fblue	*= ks.b; }
-            ret_color = fc.clone();
+            ret_color = face_color.clone();
+            if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
+            if 0 == (GIGNORE & flags) { ret_color.g += face_color.g * fcs.g; fcs.g *= ks.g; }
+            if 0 == (BIGNORE & flags) { ret_color.b += face_color.b * fcs.b; fcs.b *= ks.b; }
 
 			if (fcs.r + fcs.g + fcs.b) <= 0.1 {
 				break;
@@ -496,14 +490,14 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
                 flags |= INONLY;
             }
 
-			ig = Some(&ren.objects[idx]);
-		}
-		else{
-			let fc2 = (ren.bgproc)(eye);
-			ret_color.r	+= fc2.r * fcs.r;
-			ret_color.g	+= fc2.g * fcs.g;
-			ret_color.b	+= fc2.b * fcs.b;
-		}
+            ig = Some(&ren.objects[idx]);
+        }
+        else{
+            let fc2 = (ren.bgproc)(ren, eye);
+            ret_color.r	+= fc2.r * fcs.r;
+            ret_color.g	+= fc2.g * fcs.g;
+            ret_color.b	+= fc2.b * fcs.b;
+        }
         if !(t < std::f32::INFINITY && lev < MAXLEVEL) {
             break;
         }
