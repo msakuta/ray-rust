@@ -293,6 +293,9 @@ fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
     let mut ret_idx = 0;
 
 	for (idx, obj) in ren.objects.iter().enumerate() {
+        if idx == 0 {
+            continue;
+        }
         if let Some(ignore_obj) = ig {
             if ignore_obj as *const _ == obj as *const _ {
                 continue;
@@ -378,8 +381,8 @@ fn shading(ren: &RenderEnv,
     let (k1, k2) = {
         let ray: Vec3 = ren.light.clone();
         let k1 = 0.2;
-        let (t, _) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
-        if t >= std::f32::INFINITY || 0. < ren.objects[idx].t {
+        let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
+        if t >= std::f32::INFINITY || 0. < ren.objects[i].t {
             (k1 + diffuse_intensity, reflection_intensity)
         }
         else {
@@ -468,6 +471,9 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
             if 0 == (GIGNORE & flags) { ret_color.g += face_color.g * fcs.g; fcs.g *= ks.g; }
             if 0 == (BIGNORE & flags) { ret_color.b += face_color.b * fcs.b; fcs.b *= ks.b; }
+            if idx == 0 {
+                break;
+            }
 
 			if (fcs.r + fcs.g + fcs.b) <= 0.1 {
 				break;
