@@ -383,7 +383,7 @@ fn shading(ren: &RenderEnv,
         let k1 = 0.2;
         let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
         if t >= std::f32::INFINITY || 0. < ren.objects[i].t {
-            (k1 + diffuse_intensity, reflection_intensity)
+            ((k1 + diffuse_intensity).min(1.), reflection_intensity)
         }
         else {
             (k1, 0.)
@@ -467,7 +467,6 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             let o: &SOBJECT = &ren.objects[idx];
             let ks = (o.vft.ksproc)(o, &pt);
 
-            ret_color = face_color.clone();
             if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
             if 0 == (GIGNORE & flags) { ret_color.g += face_color.g * fcs.g; fcs.g *= ks.g; }
             if 0 == (BIGNORE & flags) { ret_color.b += face_color.b * fcs.b; fcs.b *= ks.b; }
