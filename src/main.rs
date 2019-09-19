@@ -13,19 +13,38 @@ use render::{Vec3, RenderColor, floor_static, render_object_static_def, SOBJECT,
 
 fn main() -> std::io::Result<()> {
 
-    let args: Vec<String> = env::args().collect();
-    println!("{:?}", args);
+    if env::args().len() <= 1 {
+        println!("usage: {} [width] [height] [-o output]", env::args().nth(0).unwrap());
+        return Ok(());
+    }
 
-    let (width, height): (usize, usize) = {
-        let mut width = 256;
-        let mut height = 256;
-        if 1 < args.len() {
-            width = args[1].parse().expect("width must be an int");
+    let (width, height, output): (usize, usize, String) = {
+        let mut width = 640;
+        let mut width_set = false;
+        let mut height = 480;
+        let mut height_set = false;
+        let mut output = "foo.png".to_string();
+        #[derive(PartialEq)]
+        enum Next{Default, Output}
+        let mut next = Next::Default;
+        for arg in env::args().skip(1) {
+            if next == Next::Output {
+                output = arg.clone();
+                next = Next::Default;
+            }
+            else if arg == "-o" {
+                next = Next::Output;
+            }
+            else if !width_set {
+                width = arg.parse().expect("width must be an int");
+                width_set = true;
+            }
+            else if !height_set {
+                height = arg.parse().expect("height must be an int");
+                height_set = true;
+            }
         }
-        if 2 < args.len() {
-            height = args[2].parse().expect("height must be an int");
-        }
-        (width, height)
+        (width, height, output)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -116,7 +135,7 @@ fn main() -> std::io::Result<()> {
     };
     render(&mut ren, &mut putpoint);
 
-    let buffer = File::create("foo.png")?;
+    let buffer = File::create(output)?;
     let encoder = PNGEncoder::new(buffer);
 
     encoder.encode(&data, width as u32, height as u32, ColorType::RGB(8))
