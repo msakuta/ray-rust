@@ -6,11 +6,12 @@ use image::png::PNGEncoder;
 use image::ColorType;
 
 mod render;
+mod vec3;
 
-use render::{Vec3, RenderColor,
+use render::{RenderColor,
     floor_static, render_object_static_def,
     RenderObject, RenderEnv, render};
-
+use vec3::Vec3;
 
 
 fn main() -> std::io::Result<()> {
