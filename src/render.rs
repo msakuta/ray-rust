@@ -112,7 +112,7 @@ impl Sub for &Vec3{
 }
 
 
-fn floorkd(ths: &SOBJECT, pt: &Vec3) -> RenderColor{
+fn floorkd(ths: &RenderObject, pt: &Vec3) -> RenderColor{
     RenderColor::new(
         (50. + (pt.x - ths.org.x) / 300.) % 1.,
         (50. + (pt.z - ths.org.z) / 300.) % 1.,
@@ -164,8 +164,6 @@ pub struct RenderObject{
 	frac: RenderColor /* refraction per spectrum */
 }
 
-pub type SOBJECT = RenderObject;
-
 impl RenderObject{
     pub fn new(
         vft: &'static RenderObjectStatic,
@@ -196,7 +194,7 @@ pub struct RenderEnv{
     pub yres: i32,
     pub xfov: f32,
     pub yfov: f32,
-    pub objects: Vec<SOBJECT>,
+    pub objects: Vec<RenderObject>,
     pub nobj: i32,
     pub light: Vec3,
     pub vnm: Vec3,
@@ -287,7 +285,7 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)
 /* find first object the ray hits */
 /// @returns time at which ray intersects with a shape and its object id.
 fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
-    ig: Option<&SOBJECT>, flags: u32) -> (f32, usize)
+    ig: Option<&RenderObject>, flags: u32) -> (f32, usize)
 {
     let mut t = std::f32::INFINITY;
     let mut ret_idx = 0;
@@ -447,7 +445,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 	let mut ret_color = RenderColor::new(0., 0., 0.);
 /*	bgcolor(eye, pColor);*/
 
-    let mut ig: Option<&SOBJECT> = None;
+    let mut ig: Option<&RenderObject> = None;
 	loop {
 		lev += 1;
 		let (t, idx) = raycast(ren, vi, eye, ig, flags);
@@ -464,7 +462,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             //     println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, face_color);
             // }
 
-            let o: &SOBJECT = &ren.objects[idx];
+            let o: &RenderObject = &ren.objects[idx];
             let ks = (o.vft.ksproc)(o, &pt);
 
             if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
