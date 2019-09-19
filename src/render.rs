@@ -27,10 +27,8 @@ impl RenderColor{
     }
 }
 
-#[allow(dead_code)]
-pub struct RenderObjectBase{
-	r: f32,			/* Radius */
-	org: Vec3,		/* Center */
+#[derive(Clone)]
+pub struct RenderMaterial{
 	diffuse: RenderColor, /* Diffuse(R,G,B) */
 	specular: RenderColor,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
@@ -39,69 +37,97 @@ pub struct RenderObjectBase{
 	frac: RenderColor /* refraction per spectrum */
 }
 
-trait RenderObjectInterface{
-    fn get_diffuse(&self, position: &Vec3) -> RenderColor;
-    fn get_specular(&self, position: &Vec3) -> RenderColor;
-    fn get_normal(&self, position: &Vec3) -> Vec3;
+trait RenderMaterialInterface{
     fn get_phong_number(&self) -> i32;
     fn get_transparency(&self) -> f32;
     fn get_refraction_index(&self) -> f32;
+}
+
+impl RenderMaterial{
+    pub fn new(
+        diffuse: RenderColor,
+        specular: RenderColor,
+        pn: i32,
+        t: f32,
+        n: f32)
+     -> RenderMaterial{
+         RenderMaterial{
+             diffuse,
+             specular,
+             pn,
+             t,
+             n,
+             frac: RenderColor::new(1., 1., 1.),
+         }
+    }
+
+    pub fn frac(mut self, frac: RenderColor) -> Self{
+        self.frac = frac;
+        self
+    }
+}
+
+impl RenderMaterialInterface for RenderMaterial{
+    fn get_phong_number(&self) -> i32{
+        self.pn
+    }
+
+    fn get_transparency(&self) -> f32{
+        self.t
+    }
+
+    fn get_refraction_index(&self) -> f32{
+        self.n
+    }
+}
+
+trait RenderObjectInterface{
+    fn get_material(&self) -> &RenderMaterial;
+    fn get_diffuse(&self, position: &Vec3) -> RenderColor;
+    fn get_specular(&self, position: &Vec3) -> RenderColor;
+    fn get_normal(&self, position: &Vec3) -> Vec3;
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32;
 }
 
 pub struct RenderSphere{
-    base: RenderObjectBase,
+    material: RenderMaterial,
+    r: f32,			/* Radius */
+    org: Vec3,		/* Center */
 }
 
 impl RenderSphere{
     pub fn new(
-        r: f32, org: Vec3,
-        diffuse: RenderColor,
-        specular: RenderColor,
-        pn: i32, t: f32, n: f32,
-        frac: RenderColor
+        material: RenderMaterial,
+        r: f32,
+        org: Vec3
     ) -> RenderObject {
         RenderObject::Sphere(RenderSphere{
-            base: RenderObjectBase{
+            material,
             r,
             org,
-            diffuse,
-            specular,
-            pn,
-            t,
-            n,
-            frac,
-        }})
+        })
     }
 }
 
 impl RenderObjectInterface for RenderSphere{
+    fn get_material(&self) -> &RenderMaterial{
+        &self.material
+    }
+
     fn get_diffuse(&self, _position: &Vec3) -> RenderColor{
-        self.base.diffuse.clone()
+        self.material.diffuse.clone()
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
-        self.base.specular.clone()
+        self.material.specular.clone()
     }
 
     fn get_normal(&self, position: &Vec3) -> Vec3{
-        (position - &self.base.org).normalized()
-    }
-
-    fn get_phong_number(&self) -> i32{
-        self.base.pn
-    }
-
-    fn get_transparency(&self) -> f32{
-        self.base.t
-    }
-
-    fn get_refraction_index(&self) -> f32{
-        self.base.n
+        (position - &self.org).normalized()
     }
 
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32{
-        let obj = &self.base;
+        let obj = self;
         /* calculate vector from eye position to the object's center. */
         let wpt = vi - &obj.org;
 
@@ -129,42 +155,35 @@ impl RenderObjectInterface for RenderSphere{
 }
 
 pub struct RenderFloor{
-    // vft: &'static RenderObjectStatic, /* virtual function table */
+    material: RenderMaterial,
     org: Vec3,		/* Center */
-    diffuse: RenderColor, /* Diffuse(R,G,B) */
-    specular: RenderColor,/* Specular(R,G,B) */
-    pn: i32,			/* Phong model index */
-    t: f32, /* transparency, unit length per decay */
-    n: f32, /* refraction constant */
     face_normal: Vec3,
 }
 
 impl RenderFloor{
     pub fn new(
+        material: RenderMaterial,
         org: Vec3,
-        diffuse: RenderColor,
-        specular: RenderColor,
-        pn: i32, t: f32, n: f32,
         face_normal: Vec3,
     ) -> RenderObject {
         RenderObject::Floor(RenderFloor{
-            org,
-            diffuse,
-            specular,
-            pn,
-            t,
-            n,
+            material,
             face_normal,
+            org,
         })
     }
 }
 
 impl RenderObjectInterface for RenderFloor{
+    fn get_material(&self) -> &RenderMaterial{
+        &self.material
+    }
+
     fn get_diffuse(&self, pt: &Vec3) -> RenderColor{
         RenderColor::new(
-            self.diffuse.r * (50. + (pt.x - self.org.x) / 300.) % 1.,
-            self.diffuse.g * (50. + (pt.z - self.org.z) / 300.) % 1.,
-            self.diffuse.b
+            self.material.diffuse.r * (50. + (pt.x - self.org.x) / 300.) % 1.,
+            self.material.diffuse.g * (50. + (pt.z - self.org.z) / 300.) % 1.,
+            self.material.diffuse.b
         )
 /*	{
 	double d, dd;
@@ -175,23 +194,11 @@ impl RenderObjectInterface for RenderFloor{
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
-        self.specular.clone()
+        self.material.specular.clone()
     }
 
     fn get_normal(&self, _: &Vec3) -> Vec3{
         self.face_normal
-    }
-
-    fn get_phong_number(&self) -> i32{
-        self.pn
-    }
-
-    fn get_transparency(&self) -> f32{
-        self.t
-    }
-
-    fn get_refraction_index(&self) -> f32{
-        self.n
     }
 
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, _flags: u32) -> f32{
@@ -327,7 +334,7 @@ fn shading(ren: &RenderEnv,
         let reflected_ray_to_light_source = &(n * ln2) - &ren.light;
 
         let eps = std::f32::EPSILON;
-        let pn = o.get_phong_number();
+        let pn = o.get_material().get_phong_number();
         (
             light_incidence.max(0.),
             pt + &(&ren.light * eps),
@@ -345,7 +352,7 @@ fn shading(ren: &RenderEnv,
         let ray: Vec3 = ren.light.clone();
         let k1 = 0.2;
         let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
-        if t >= std::f32::INFINITY || 0. < ren.objects[i].get_interface().get_transparency() {
+        if t >= std::f32::INFINITY || 0. < ren.objects[i].get_interface().get_material().get_transparency() {
             ((k1 + diffuse_intensity).min(1.), reflection_intensity)
         }
         else {
@@ -362,13 +369,13 @@ fn shading(ren: &RenderEnv,
 	// }
 
 	/* refraction! */
-	if nest < MAXREFLAC && 0. < o.get_transparency() {
+	if nest < MAXREFLAC && 0. < o.get_material().get_transparency() {
 		let sp = eye.dot(&n);
-		let f = o.get_transparency();
+		let f = o.get_material().get_transparency();
 
 		let fc2 = {
-            // println!("Refraction index: {}", o.get_refraction_index());
-			let reference = sp * (if sp > 0. { o.get_refraction_index() } else { 1. / o.get_refraction_index() } - 1.);
+            let frac = o.get_material().get_refraction_index();
+			let reference = sp * (if sp > 0. { frac } else { 1. / frac } - 1.);
             let mut ray = (eye + &(n * reference)).normalized();
             let eps = std::f32::EPSILON;
 			let mut pt3 = pt + &(&ray * eps);
