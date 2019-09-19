@@ -27,49 +27,8 @@ impl RenderColor{
     }
 }
 
-
-fn floorkd(ths: &RenderObject, pt: &Vec3) -> RenderColor{
-    RenderColor::new(
-        (50. + (pt.x - ths.org.x) / 300.) % 1.,
-        (50. + (pt.z - ths.org.z) / 300.) % 1.,
-        0.
-    )
-/*	{
-	double d, dd;
-	d = fmod(50. + (pt->x - ths->org.x) / 300., 1.) - .5;
-	dd = fmod(50. + (pt->z - ths->org.z) / 300., 1.) - .5;
-	kd->r = kd->g = kd->b = .5 / (250. * (d * d * dd * dd) + 1.);
-	}*/
-}
-
 #[allow(dead_code)]
-pub struct RenderObjectStatic{
-	kdproc: fn(ths: &RenderObject, pt: &Vec3) -> RenderColor,
-	ksproc: fn(ths: &RenderObject, pt: &Vec3) -> RenderColor,
-}
-
-#[allow(non_upper_case_globals)]
-pub const floor_static: RenderObjectStatic = RenderObjectStatic{
-    kdproc: floorkd,
-    ksproc: floorkd,
-};
-
-fn kdproc_def(ths: &RenderObject, _: &Vec3) -> RenderColor{
-	ths.diffuse.clone()
-}
-fn ksproc_def(ths: &RenderObject, _: &Vec3) -> RenderColor{
-	ths.specular.clone()
-}
-
-#[allow(non_upper_case_globals)]
-pub const render_object_static_def: RenderObjectStatic = RenderObjectStatic{
-    kdproc: kdproc_def,
-    ksproc: ksproc_def,
-};
-
-#[allow(dead_code)]
-pub struct RenderObject{
-	vft: &'static RenderObjectStatic, /* virtual function table */
+pub struct RenderObjectBase{
 	r: f32,			/* Radius */
 	org: Vec3,		/* Center */
 	diffuse: RenderColor, /* Diffuse(R,G,B) */
@@ -80,17 +39,30 @@ pub struct RenderObject{
 	frac: RenderColor /* refraction per spectrum */
 }
 
-impl RenderObject{
+trait RenderObjectInterface{
+    fn get_diffuse(&self, position: &Vec3) -> RenderColor;
+    fn get_specular(&self, position: &Vec3) -> RenderColor;
+    fn get_normal(&self, position: &Vec3) -> Vec3;
+    fn get_phong_number(&self) -> i32;
+    fn get_transparency(&self) -> f32;
+    fn get_refraction_index(&self) -> f32;
+    fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32;
+}
+
+pub struct RenderSphere{
+    base: RenderObjectBase,
+}
+
+impl RenderSphere{
     pub fn new(
-        vft: &'static RenderObjectStatic,
         r: f32, org: Vec3,
         diffuse: RenderColor,
         specular: RenderColor,
         pn: i32, t: f32, n: f32,
         frac: RenderColor
     ) -> RenderObject {
-        RenderObject{
-            vft,
+        RenderObject::Sphere(RenderSphere{
+            base: RenderObjectBase{
             r,
             org,
             diffuse,
@@ -99,6 +71,152 @@ impl RenderObject{
             t,
             n,
             frac,
+        }})
+    }
+}
+
+impl RenderObjectInterface for RenderSphere{
+    fn get_diffuse(&self, _position: &Vec3) -> RenderColor{
+        self.base.diffuse.clone()
+    }
+
+    fn get_specular(&self, _position: &Vec3) -> RenderColor{
+        self.base.specular.clone()
+    }
+
+    fn get_normal(&self, position: &Vec3) -> Vec3{
+        (position - &self.base.org).normalized()
+    }
+
+    fn get_phong_number(&self) -> i32{
+        self.base.pn
+    }
+
+    fn get_transparency(&self) -> f32{
+        self.base.t
+    }
+
+    fn get_refraction_index(&self) -> f32{
+        self.base.n
+    }
+
+    fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32{
+        let obj = &self.base;
+        /* calculate vector from eye position to the object's center. */
+        let wpt = vi - &obj.org;
+
+        /* scalar product of the ray and the vector. */
+        let b = 2.0f32 * eye.dot(&wpt);
+
+        /* ??? */
+        let c = wpt.dot(&wpt) - obj.r * obj.r;
+
+        /* discriminant?? */
+        let d2 = b * b - 4.0f32 * c;
+        if d2 >= std::f32::EPSILON {
+            let d = d2.sqrt();
+            let t0 = (-b - d) as f32 / 2.0f32;
+            if 0 == (flags & OUTONLY) && t0 >= 0.0f32 && t0 < ray_length {
+                return t0;
+            }
+            else if 0 == (flags & INONLY) && 0f32 < (t0 + d) && t0 + d < ray_length {
+                return t0 + d;
+            }
+        }
+
+        ray_length
+    }
+}
+
+pub struct RenderFloor{
+    // vft: &'static RenderObjectStatic, /* virtual function table */
+    org: Vec3,		/* Center */
+    diffuse: RenderColor, /* Diffuse(R,G,B) */
+    specular: RenderColor,/* Specular(R,G,B) */
+    pn: i32,			/* Phong model index */
+    t: f32, /* transparency, unit length per decay */
+    n: f32, /* refraction constant */
+    face_normal: Vec3,
+}
+
+impl RenderFloor{
+    pub fn new(
+        org: Vec3,
+        diffuse: RenderColor,
+        specular: RenderColor,
+        pn: i32, t: f32, n: f32,
+        face_normal: Vec3,
+    ) -> RenderObject {
+        RenderObject::Floor(RenderFloor{
+            org,
+            diffuse,
+            specular,
+            pn,
+            t,
+            n,
+            face_normal,
+        })
+    }
+}
+
+impl RenderObjectInterface for RenderFloor{
+    fn get_diffuse(&self, pt: &Vec3) -> RenderColor{
+        RenderColor::new(
+            self.diffuse.r * (50. + (pt.x - self.org.x) / 300.) % 1.,
+            self.diffuse.g * (50. + (pt.z - self.org.z) / 300.) % 1.,
+            self.diffuse.b
+        )
+/*	{
+	double d, dd;
+	d = fmod(50. + (pt->x - ths->org.x) / 300., 1.) - .5;
+	dd = fmod(50. + (pt->z - ths->org.z) / 300., 1.) - .5;
+	kd->r = kd->g = kd->b = .5 / (250. * (d * d * dd * dd) + 1.);
+	}*/
+    }
+
+    fn get_specular(&self, _position: &Vec3) -> RenderColor{
+        self.specular.clone()
+    }
+
+    fn get_normal(&self, _: &Vec3) -> Vec3{
+        self.face_normal
+    }
+
+    fn get_phong_number(&self) -> i32{
+        self.pn
+    }
+
+    fn get_transparency(&self) -> f32{
+        self.t
+    }
+
+    fn get_refraction_index(&self) -> f32{
+        self.n
+    }
+
+    fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, _flags: u32) -> f32{
+        let wpt = vi - &self.org;
+        let w = self.face_normal.dot(eye);
+        if /*fabs(w) > 1.0e-7*/ w <= 0. {
+            let t0 = (-self.face_normal.dot(&wpt)) / w;
+            if t0 >= 0. && t0 < ray_length {
+                return t0;
+            }
+        }
+        ray_length
+    }
+}
+
+pub enum RenderObject{
+    Sphere(RenderSphere),
+    Floor(RenderFloor)
+}
+
+impl RenderObject{
+    fn get_interface(&self) -> &RenderObjectInterface{
+        match self {
+            RenderObject::Sphere(obj) => obj as &RenderObjectInterface,
+            RenderObject::Floor(obj) => obj as &RenderObjectInterface,
         }
     }
 }
@@ -113,7 +231,6 @@ pub struct RenderEnv{
     pub objects: Vec<RenderObject>,
     pub nobj: i32,
     pub light: Vec3,
-    pub vnm: Vec3,
     pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
 }
 
@@ -122,7 +239,6 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)
 	let mut view: Mat4 = MAT4IDENTITY;
 
 	ren.light.normalize();
-	ren.vnm.normalize();
 
 	{
 		let mr = [
@@ -178,59 +294,20 @@ fn raycast(ren: &RenderEnv, vi: &Vec3, eye: &Vec3,
     let mut ret_idx = 0;
 
 	for (idx, obj) in ren.objects.iter().enumerate() {
-        if idx == 0 {
-            continue;
-        }
         if let Some(ignore_obj) = ig {
             if ignore_obj as *const _ == obj as *const _ {
                 continue;
             }
         }
-        /* calculate vector from eye position to the object's center. */
-        let wpt = vi - &obj.org;
 
-        /* scalar product of the ray and the vector. */
-        let b = 2.0f32 * eye.dot(&wpt);
-
-        /* ??? */
-        let c = wpt.dot(&wpt) - obj.r * obj.r;
-
-        /* discriminant?? */
-        let d2 = b * b - 4.0f32 * c;
-        if d2 >= std::f32::EPSILON {
-            let d = d2.sqrt();
-            let t0 = (-b - d) as f32 / 2.0f32;
-            if 0 == (flags & OUTONLY) && t0 >= 0.0f32 && t0 < t {
-                t = t0;
-                ret_idx = idx;
-            }
-            else if 0 == (flags & INONLY) && 0f32 < (t0 + d) && t0 + d < t {
-                t = t0 + d;
-                ret_idx = idx;
-            }
+        let obj_t = obj.get_interface().raycast(vi, eye, t, flags);
+        if obj_t < t {
+            t = obj_t;
+            ret_idx = idx;
         }
     }
 
-    let wpt = vi - &ren.objects[0].org;
-	let w = ren.vnm.dot(eye);
-	if /*fabs(w) > 1.0e-7*/ w <= 0. {
-		let t0 = (-ren.vnm.dot(&wpt)) / w;
-		if t0 >= 0. && t0 < t {
-			t = t0;
-			ret_idx = 0;
-		}
-	}
-
 	(t, ret_idx)
-}
-
-/* calculate normalized normal vector */
-fn normal_vector(ren: &RenderEnv, idx: usize, pt: &Vec3) -> Vec3
-{
-    if 0 == idx { ren.vnm.clone() }
-    else{
-        (pt - &ren.objects[idx].org).normalized()
-	}
 }
 
 fn shading(ren: &RenderEnv,
@@ -240,22 +317,23 @@ fn shading(ren: &RenderEnv,
             eye: &Vec3,
             nest: i32) -> RenderColor
 {
+    let o = &ren.objects[idx].get_interface();
+
     // let mut lv: f32;
     let (diffuse_intensity, reflected_ray, reflection_intensity) = {
-        let o = &ren.objects[idx];
-
         /* scalar product of light normal and surface normal */
         let light_incidence = ren.light.dot(n);
         let ln2 = 2.0 * light_incidence;
         let reflected_ray_to_light_source = &(n * ln2) - &ren.light;
 
         let eps = std::f32::EPSILON;
+        let pn = o.get_phong_number();
         (
             light_incidence.max(0.),
             pt + &(&ren.light * eps),
-            if 0 != o.pn {
+            if 0 != pn {
                 let reflection_incidence = -reflected_ray_to_light_source.dot(eye);
-                if reflection_incidence > 0.0 { reflection_incidence.powi(o.pn) }
+                if reflection_incidence > 0.0 { reflection_incidence.powi(pn) }
                 else        { 0.0 }
             }
             else { 0. }
@@ -267,7 +345,7 @@ fn shading(ren: &RenderEnv,
         let ray: Vec3 = ren.light.clone();
         let k1 = 0.2;
         let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
-        if t >= std::f32::INFINITY || 0. < ren.objects[i].t {
+        if t >= std::f32::INFINITY || 0. < ren.objects[i].get_interface().get_transparency() {
             ((k1 + diffuse_intensity).min(1.), reflection_intensity)
         }
         else {
@@ -275,9 +353,8 @@ fn shading(ren: &RenderEnv,
         }
     };
 
-    let o = &ren.objects[idx];
 	/* face texturing */
-		let kd = (o.vft.kdproc)(o, pt);
+		let kd = o.get_diffuse(pt);
 	// else{
 	// 	kd.fred = ren.objects[idx].kdr;
 	// 	kd.fgreen = ren.objects[idx].kdg;
@@ -285,12 +362,13 @@ fn shading(ren: &RenderEnv,
 	// }
 
 	/* refraction! */
-	if nest < MAXREFLAC && 0. < ren.objects[idx].t {
+	if nest < MAXREFLAC && 0. < o.get_transparency() {
 		let sp = eye.dot(&n);
-		let f = o.t;
+		let f = o.get_transparency();
 
 		let fc2 = {
-			let reference = sp * (if sp > 0. { ren.objects[idx].n } else { 1. / ren.objects[idx].n } - 1.);
+            // println!("Refraction index: {}", o.get_refraction_index());
+			let reference = sp * (if sp > 0. { o.get_refraction_index() } else { 1. / o.get_refraction_index() } - 1.);
             let mut ray = (eye + &(n * reference)).normalized();
             let eps = std::f32::EPSILON;
 			let mut pt3 = pt + &(&ray * eps);
@@ -343,14 +421,14 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             // What a terrible formula... it's almost impractical to use it everywhere.
             let pt = &(&*eye * t) + vi;
 
-            let n = normal_vector(ren, idx, &pt);
+            let o = &ren.objects[idx].get_interface();
+            let n = o.get_normal(&pt);
             let face_color = shading(ren, idx,&n,&pt,eye, lev);
             // if idx == 2 {
             //     println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, face_color);
             // }
 
-            let o: &RenderObject = &ren.objects[idx];
-            let ks = (o.vft.ksproc)(o, &pt);
+            let ks = o.get_specular(&pt);
 
             if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
             if 0 == (GIGNORE & flags) { ret_color.g += face_color.g * fcs.g; fcs.g *= ks.g; }

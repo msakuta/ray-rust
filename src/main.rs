@@ -9,8 +9,8 @@ mod render;
 mod vec3;
 
 use render::{RenderColor,
-    floor_static, render_object_static_def,
-    RenderObject, RenderEnv, render};
+    RenderObject, RenderSphere, RenderFloor,
+    RenderEnv, render};
 use vec3::Vec3;
 
 
@@ -69,22 +69,19 @@ fn main() -> std::io::Result<()> {
         data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
-        // PutPointWin(&wg, x, ren.yres - y,
-        //     RGB((BYTE )(fc->fred > 1.F ? 255 : fc->fred * 255),
-        //         (BYTE )(fc->fgreen > 1.F ? 255 : fc->fgreen * 255),
-        //         (BYTE )(fc->fblue > 1.F ? 255 : fc->fblue * 255)));
     };
 
     let objects: Vec<RenderObject> = vec!{
     /* Plane */
-        RenderObject::new(&floor_static,               0.0, Vec3::new(  0.0,-300.0,  0.0), RenderColor::new(0.0, 0.5, 0.5), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0., RenderColor::new(1., 1., 1.)),
+        RenderFloor::new (       Vec3::new(  0.0, -300.0,  0.0), RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0, Vec3::new(0., 1., 0.)),
+        // RenderFloor::new (       Vec3::new(-300.0,   0.0,  0.0), RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0, Vec3::new(1., 0., 0.)),
     /* Spheres */
-        RenderObject::new(&render_object_static_def,  80.0, Vec3::new(  0.0, -30.0,172.0), RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(1.0, 1.0, 1.0), 24, 0., 0., RenderColor::new(1., 1., 1.)),
-        RenderObject::new(&render_object_static_def,  80.0, Vec3::new(-200.0,-200.0,172.0), RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),24, 0., 0., RenderColor::new(1., 1., 1.)),
-    /*	{&render_object_static_def,  80.0F,  70.0F,-200.0F,150.0F, 0.0F, 0.0F, 0.8F, 0.0F, 0.0F, 0.0F, 0.0F,24, 1., 1., {1.}},*/
-        RenderObject::new(&render_object_static_def, 100.0, Vec3::new(70.0,-200.0,150.0), RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 0, 1., 1.5, RenderColor::new(1.49998, 1.49999, 1.5)),
-    /*	{&render_object_static_def, 1000.F, 0.F, 0.F, 1500.F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F,24, 0, 0},*/
-    /*	{&render_object_static_def,  100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
+        RenderSphere::new( 80.0, Vec3::new(   0.0, -30.0,172.0), RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(1.0, 1.0, 1.0), 24, 0., 0.0, RenderColor::new(1., 1., 1.)),
+        RenderSphere::new( 80.0, Vec3::new(-200.0,-200.0,172.0), RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 24, 0., 0.0, RenderColor::new(1., 1., 1.)),
+    /*	{80.0F,  70.0F,-200.0F,150.0F, 0.0F, 0.0F, 0.8F, 0.0F, 0.0F, 0.0F, 0.0F,24, 1., 1., {1.}},*/
+        RenderSphere::new(100.0, Vec3::new(  70.0,-200.0,150.0), RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 1., 1.5, RenderColor::new(1.49998, 1.49999, 1.5)),
+    /*	{000.F, 0.F, 0.F, 1500.F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F,24, 0, 0},*/
+    /*	{100.F, -70.F, -150.F, 160.F, 0.0F, 0.5F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,24, .5F, .2F},*/
     };
 
     use std::f32::consts::PI;
@@ -133,7 +130,6 @@ fn main() -> std::io::Result<()> {
         objects,
         nobj: num_objects as i32, /* objects, nobj */
         light: Vec3::new(50., 60., -50.), /* light */
-        vnm: Vec3::new(0., 1., 0.), /* vnm */
         bgproc: bgcolor, /* bgproc */
     };
     render(&mut ren, &mut putpoint);
