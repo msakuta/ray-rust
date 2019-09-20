@@ -1,8 +1,8 @@
 
 use crate::vec3::{Vec3, Mat4, MAT4IDENTITY, matcat, concat};
 
-pub const MAXLEVEL: i32 = 2;
-pub const MAXREFLAC: i32 = 10;
+pub const MAX_REFLECTIONS: i32 = 3;
+pub const MAX_REFRACTIONS: i32 = 10;
 
 
 const OUTONLY: u32 = (1<<0);
@@ -369,7 +369,7 @@ fn shading(ren: &RenderEnv,
 	// }
 
 	/* refraction! */
-	if nest < MAXREFLAC && 0. < o.get_material().get_transparency() {
+	if nest < MAX_REFRACTIONS && 0. < o.get_material().get_transparency() {
 		let sp = eye.dot(&n);
 		let f = o.get_material().get_transparency();
 
@@ -448,7 +448,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 				break;
             }
 
-			if lev >= MAXLEVEL {
+			if lev >= MAX_REFLECTIONS {
                 break;
             }
 
@@ -473,7 +473,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             ret_color.g	+= fc2.g * fcs.g;
             ret_color.b	+= fc2.b * fcs.b;
         }
-        if !(t < std::f32::INFINITY && lev < MAXLEVEL) {
+        if !(t < std::f32::INFINITY && lev < MAX_REFLECTIONS) {
             break;
         }
 	}

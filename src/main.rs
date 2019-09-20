@@ -91,7 +91,8 @@ fn main() -> std::io::Result<()> {
         RenderFloor::new (floor_material,       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.)),
         // RenderFloor::new (floor_material,       Vec3::new(-300.0,   0.0,  0.0),  Vec3::new(1., 0., 0.)),
     /* Spheres */
-        RenderSphere::new(mirror_material, 80.0, Vec3::new(   0.0, -30.0,172.0)),
+        RenderSphere::new(mirror_material.clone(), 80.0, Vec3::new(   0.0, -30.0,172.0)),
+        RenderSphere::new(mirror_material, 80.0, Vec3::new(   -200.0, -30.0,172.0)),
         RenderSphere::new(red_material, 80.0, Vec3::new(-200.0,-200.0,172.0)),
     /*	{80.0F,  70.0F,-200.0F,150.0F, 0.0F, 0.0F, 0.8F, 0.0F, 0.0F, 0.0F, 0.0F,24, 1., 1., {1.}},*/
         RenderSphere::new(transparent_material, 100.0, Vec3::new(  70.0,-200.0,150.0)),
