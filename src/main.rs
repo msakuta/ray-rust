@@ -134,21 +134,18 @@ fn main() -> std::io::Result<()> {
     }
 
     let num_objects = objects.len();
-
-    let mut ren: RenderEnv = RenderEnv{
-        cam: Vec3::new(0., -150., -300.), /* cam */
-        pyr: Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */
-        xres: xmax as i32,
-        yres: ymax as i32, /* xres, yres */
-        xfov: xfov,
-        yfov: yfov, /* xfov, yfov*/
+    let mut ren: RenderEnv = RenderEnv::new(
+        Vec3::new(0., -150., -300.), /* cam */
+        Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */
+        xmax as i32,
+        ymax as i32, /* xres, yres */
+        xfov,
+        yfov, /* xfov, yfov*/
         //pointproc: putpoint, /* pointproc */
         objects,
-        nobj: num_objects as i32, /* objects, nobj */
-        light: Vec3::new(50., 60., -50.), /* light */
-        bgproc: bgcolor, /* bgproc */
-    };
-    render(&mut ren, &mut putpoint);
+        bgcolor, /* bgproc */
+    ).light(Vec3::new(50., 60., -50.));
+    render(&mut ren, &mut putpoint, false);
 
     let buffer = File::create(output)?;
     let encoder = PNGEncoder::new(buffer);

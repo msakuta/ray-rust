@@ -25,6 +25,10 @@ impl RenderColor{
     pub fn new(r: f32, g: f32, b: f32) -> Self {
         Self{r, g, b}
     }
+
+    pub fn zero() -> Self {
+        Self{r: 0., g: 0., b: 0.}
+    }
 }
 
 #[derive(Clone)]
@@ -236,16 +240,46 @@ pub struct RenderEnv{
     pub xfov: f32,
     pub yfov: f32,
     pub objects: Vec<RenderObject>,
-    pub nobj: i32,
+    pub nobj: usize,
     pub light: Vec3,
     pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
 }
 
+impl RenderEnv{
+    pub fn new(
+        cam: Vec3, /* camera position */
+        pyr: Vec3, /* camera direction in pitch yaw roll form */
+        xres: i32,
+        yres: i32,
+        xfov: f32,
+        yfov: f32,
+        objects: Vec<RenderObject>,
+        bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
+    ) -> Self{
+        RenderEnv{
+            cam, /* camera position */
+            pyr, /* camera direction in pitch yaw roll form */
+            xres,
+            yres,
+            xfov,
+            yfov,
+            objects,
+            nobj: objects.len(),
+            light: Vec3::new(0., 0., 1.),
+            bgproc,
+        }
+    }
 
-pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)) {
+    pub fn light(mut self, light: Vec3) -> Self{
+        self.light = light.normalized();
+        self
+    }
+}
+
+
+pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
+    use_multithread: bool) {
 	let mut view: Mat4 = MAT4IDENTITY;
-
-	ren.light.normalize();
 
 	{
 		let mr = [
@@ -276,7 +310,7 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)
 	view.x[1][3] = 0.;
 	view.x[2][3] = 30.;*/
 
-    for iy in 0..ren.yres {
+    let process_line = |iy: i32, point_middle: &mut FnMut(i32, i32, &RenderColor)| {
         for ix in 0..ren.xres {
             let mut vi = ren.cam.clone();
             let mut eye: Vec3 = Vec3::new( /* cast ray direction vector? */
@@ -286,10 +320,46 @@ pub fn render(ren: &mut RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor)
             );
             eye = concat(&view, &eye).normalized();
 
-            pointproc(ix, iy, &raytrace(ren, &mut vi, &mut eye, 0, 0));
+            point_middle(ix, iy, &raytrace(ren, &mut vi, &mut eye, 0, 0));
+        }
+    };
+
+    if use_multithread {
+        let mut point_middle = |ix: i32, iy: i32, col: &RenderColor| {
+            pointproc(ix, iy, col);
+        };
+        for iy in 0..ren.yres {
+            process_line(iy, &mut point_middle);
+        }
+    }
+    else{
+        use std::thread;
+        let handles: Vec<thread::JoinHandle<Vec<RenderColor>>> = (0..ren.yres).map(|iy| {
+            let xres = ren.xres;
+            println!("Started thread {}", iy);
+            //let tx1 = mpsc::Sender::clone(&tx);
+            thread::spawn(||{
+                let mut linebuf = vec![RenderColor::zero(); xres as usize];
+                process_line(iy, &mut |ix: i32, _iy: i32, col: &RenderColor| {
+                    linebuf[ix as usize] = col.clone();
+                });
+
+                //tx1.send(i).unwrap();
+                print!("Finished thread: {}\n", iy);
+                linebuf
+            })
+        }).collect();
+
+        for (iy,h) in handles.into_iter().enumerate() {
+            let results: Vec<RenderColor> = h.join().unwrap();
+            for (ix,c) in results.iter().enumerate() {
+                pointproc(ix as i32, iy as i32, &c);
+            }
+            print!("Joined thread: {}\n", iy);
         }
     }
 }
+
 
 
 /* find first object the ray hits */
