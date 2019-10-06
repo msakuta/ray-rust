@@ -1,7 +1,9 @@
 extern crate image;
+extern crate crossbeam;
 
 use std::fs::File;
 use std::env;
+use std::time::Instant;
 use image::png::PNGEncoder;
 use image::ColorType;
 
@@ -22,33 +24,46 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    let (width, height, output): (usize, usize, String) = {
+    let (width, height, output, thread_count): (usize, usize, String, i32) = {
         let mut width = 640;
         let mut width_set = false;
         let mut height = 480;
         let mut height_set = false;
         let mut output = "foo.png".to_string();
+        let mut thread_count = 8;
         #[derive(PartialEq)]
-        enum Next{Default, Output}
+        enum Next{Default, Output, ThreadCount}
         let mut next = Next::Default;
         for arg in env::args().skip(1) {
-            if next == Next::Output {
-                output = arg.clone();
-                next = Next::Default;
-            }
-            else if arg == "-o" {
-                next = Next::Output;
-            }
-            else if !width_set {
-                width = arg.parse().expect("width must be an int");
-                width_set = true;
-            }
-            else if !height_set {
-                height = arg.parse().expect("height must be an int");
-                height_set = true;
+            match next {
+                Next::Output => {
+                    output = arg.clone();
+                    next = Next::Default;
+                },
+                Next::ThreadCount => {
+                    thread_count = arg.parse().expect("thread count must be an int");
+                    assert!(1 <= thread_count);
+                    next = Next::Default;
+                },
+                _ => {
+                    if arg == "-o" {
+                        next = Next::Output;
+                    }
+                    else if arg == "-t" {
+                        next = Next::ThreadCount;
+                    }
+                    else if !width_set {
+                        width = arg.parse().expect("width must be an int");
+                        width_set = true;
+                    }
+                    else if !height_set {
+                        height = arg.parse().expect("height must be an int");
+                        height_set = true;
+                    }
+                }
             }
         }
-        (width, height, output)
+        (width, height, output, thread_count)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -133,7 +148,6 @@ fn main() -> std::io::Result<()> {
         // else PointMandel(dir->x * 2., dir->z * 2., 32, ret);
     }
 
-    let num_objects = objects.len();
     let mut ren: RenderEnv = RenderEnv::new(
         Vec3::new(0., -150., -300.), /* cam */
         Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */
@@ -145,7 +159,13 @@ fn main() -> std::io::Result<()> {
         objects,
         bgcolor, /* bgproc */
     ).light(Vec3::new(50., 60., -50.));
-    render(&mut ren, &mut putpoint, false);
+
+    let start = Instant::now();
+
+    render(&mut ren, &mut putpoint, thread_count);
+
+    let end = start.elapsed();
+    println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_nanos() / 1_000);
 
     let buffer = File::create(output)?;
     let encoder = PNGEncoder::new(buffer);

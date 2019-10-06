@@ -240,7 +240,6 @@ pub struct RenderEnv{
     pub xfov: f32,
     pub yfov: f32,
     pub objects: Vec<RenderObject>,
-    pub nobj: usize,
     pub light: Vec3,
     pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
 }
@@ -264,7 +263,6 @@ impl RenderEnv{
             xfov,
             yfov,
             objects,
-            nobj: objects.len(),
             light: Vec3::new(0., 0., 1.),
             bgproc,
         }
@@ -278,7 +276,7 @@ impl RenderEnv{
 
 
 pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
-    use_multithread: bool) {
+    thread_count: i32) {
 	let mut view: Mat4 = MAT4IDENTITY;
 
 	{
@@ -324,7 +322,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
         }
     };
 
-    if use_multithread {
+    if thread_count == 1 {
         let mut point_middle = |ix: i32, iy: i32, col: &RenderColor| {
             pointproc(ix, iy, col);
         };
@@ -333,30 +331,39 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
         }
     }
     else{
-        use std::thread;
-        let handles: Vec<thread::JoinHandle<Vec<RenderColor>>> = (0..ren.yres).map(|iy| {
-            let xres = ren.xres;
-            println!("Started thread {}", iy);
-            //let tx1 = mpsc::Sender::clone(&tx);
-            thread::spawn(||{
-                let mut linebuf = vec![RenderColor::zero(); xres as usize];
-                process_line(iy, &mut |ix: i32, _iy: i32, col: &RenderColor| {
-                    linebuf[ix as usize] = col.clone();
-                });
+        let scanlines = ren.yres / thread_count;
+        println!("Splitting into {} scanlines; {} threads", scanlines, thread_count);
+        crossbeam::scope(|scope| {
+            // let handles: Vec<thread::JoinHandle<Vec<RenderColor>>> = (0..ren.yres).map(|iy| {
+            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, Vec<RenderColor>>> = (0..thread_count).map(|iy| {
+                // println!("Started thread {}", iy);
+                //let tx1 = mpsc::Sender::clone(&tx);
+                scope.spawn(move |_| {
+                    let mut linebuf = vec![RenderColor::zero(); (ren.xres * scanlines) as usize];
+                    for iyy in 0..scanlines {
+                        process_line(iy + iyy * thread_count, &mut |ix: i32, _iy: i32, col: &RenderColor| {
+                            linebuf[(ix + iyy * ren.xres) as usize] = col.clone();
+                        });
+                    }
 
-                //tx1.send(i).unwrap();
-                print!("Finished thread: {}\n", iy);
-                linebuf
-            })
-        }).collect();
+                    //tx1.send(i).unwrap();
+                    // print!("Finished thread: {}\n", iy);
+                    linebuf
+                })
+            }).collect();
 
-        for (iy,h) in handles.into_iter().enumerate() {
-            let results: Vec<RenderColor> = h.join().unwrap();
-            for (ix,c) in results.iter().enumerate() {
-                pointproc(ix as i32, iy as i32, &c);
+            for (iy,h) in handles.into_iter().enumerate() {
+                let results: Vec<RenderColor> = h.join().unwrap();
+                for (ix,c) in results.iter().enumerate() {
+                    let x = ix % ren.xres as usize;
+                    let y = iy + ix / ren.xres as usize * thread_count as usize;
+                    if y < ren.yres as usize {
+                        pointproc(x as i32, y as i32, &c);
+                    }
+                }
+                // print!("Joined thread: {}\n", iy);
             }
-            print!("Joined thread: {}\n", iy);
-        }
+        }).expect("Worker thread join failed");
     }
 }
 
