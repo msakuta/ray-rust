@@ -331,7 +331,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
         }
     }
     else{
-        let scanlines = ren.yres / thread_count;
+        let scanlines = (ren.yres + thread_count - 1) / thread_count;
         println!("Splitting into {} scanlines; {} threads", scanlines, thread_count);
         crossbeam::scope(|scope| {
             // let handles: Vec<thread::JoinHandle<Vec<RenderColor>>> = (0..ren.yres).map(|iy| {

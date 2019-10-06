@@ -20,7 +20,7 @@ use vec3::Vec3;
 fn main() -> std::io::Result<()> {
 
     if env::args().len() <= 1 {
-        println!("usage: {} [width] [height] [-o output]", env::args().nth(0).unwrap());
+        println!("usage: {} [width] [height] [-o output] [-t thread_count]", env::args().nth(0).unwrap());
         return Ok(());
     }
 
