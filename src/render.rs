@@ -304,7 +304,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
 	view.x[1][3] = 0.;
 	view.x[2][3] = 30.;*/
 
-    let process_line = |iy: i32, point_middle: &mut FnMut(i32, i32, &RenderColor)| {
+    let process_line = |iy: i32, point_middle: &mut FnMut(i32, i32, RenderColor)| {
         for ix in 0..ren.xres {
             let mut vi = ren.cam.clone();
             let mut eye: Vec3 = Vec3::new( /* cast ray direction vector? */
@@ -315,13 +315,13 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
             eye = Vec3::from(vecmath::vec3_normalized(
                 vecmath::row_mat3x4_transform_vec3(view, eye.into())));
 
-            point_middle(ix, iy, &raytrace(ren, &mut vi, &mut eye, 0, 0));
+            point_middle(ix, iy, raytrace(ren, &mut vi, &mut eye, 0, 0));
         }
     };
 
     if thread_count == 1 {
-        let mut point_middle = |ix: i32, iy: i32, col: &RenderColor| {
-            pointproc(ix, iy, col);
+        let mut point_middle = |ix: i32, iy: i32, col: RenderColor| {
+            pointproc(ix, iy, &col);
         };
         for iy in 0..ren.yres {
             process_line(iy, &mut point_middle);
@@ -338,8 +338,8 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
                 scope.spawn(move |_| {
                     let mut linebuf = vec![RenderColor::zero(); (ren.xres * scanlines) as usize];
                     for iyy in 0..scanlines {
-                        process_line(iy + iyy * thread_count, &mut |ix: i32, _iy: i32, col: &RenderColor| {
-                            linebuf[(ix + iyy * ren.xres) as usize] = col.clone();
+                        process_line(iy + iyy * thread_count, &mut |ix: i32, _iy: i32, col: RenderColor| {
+                            linebuf[(ix + iyy * ren.xres) as usize] = col;
                         });
                     }
 
