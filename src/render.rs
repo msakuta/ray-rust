@@ -1,5 +1,6 @@
 
-use crate::vec3::{Vec3, Mat4, MAT4IDENTITY, matcat, concat};
+use crate::vec3::Vec3;
+use vecmath;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -277,32 +278,27 @@ impl RenderEnv{
 
 pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
     thread_count: i32) {
-	let mut view: Mat4 = MAT4IDENTITY;
+    use vecmath::{Matrix3x4, row_mat3x4_mul};
+    let mx: Matrix3x4<f32> = [
+        [1., 0., 0., 0.],
+        [0., ren.pyr.z.cos(), -ren.pyr.z.sin(), 0.],
+        [0., ren.pyr.z.sin(), ren.pyr.z.cos(), 0.],
+    ];
 
-	{
-		let mr = [
-			[1., 0., 0., 0.],
-			[0., ren.pyr.z.cos(), -ren.pyr.z.sin(), 0.],
-			[0., ren.pyr.z.sin(), ren.pyr.z.cos(), 0.],
-        ];
-		view = matcat(&view, &mr);
-	}
-	{
-		let my = [
-			[ren.pyr.y.cos(), -ren.pyr.y.sin(), 0., 0.],
-			[ren.pyr.y.sin(), ren.pyr.y.cos(), 0., 0.],
-			[0., 0., 1., 0.]
-        ];
-		view = matcat(&view, &my);
-	}
-	{
-		let mp = [
-			[ren.pyr.x.cos(), 0., ren.pyr.x.sin(), 0.],
-			[0., 1., 0., 0.],
-			[-ren.pyr.x.sin(), 0., ren.pyr.x.cos(), 0.],
-        ];
-		view = matcat(&view, &mp);
-	}
+    let my = [
+        [ren.pyr.y.cos(), -ren.pyr.y.sin(), 0., 0.],
+        [ren.pyr.y.sin(), ren.pyr.y.cos(), 0., 0.],
+        [0., 0., 1., 0.]
+    ];
+
+    let mp = [
+        [ren.pyr.x.cos(), 0., ren.pyr.x.sin(), 0.],
+        [0., 1., 0., 0.],
+        [-ren.pyr.x.sin(), 0., ren.pyr.x.cos(), 0.],
+    ];
+
+    let view = row_mat3x4_mul(row_mat3x4_mul(mx, my), mp);
+
     // println!("Projection: {:?}", view);
 /*	view.x[0][3] = 100.;
 	view.x[1][3] = 0.;
@@ -316,7 +312,8 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
                 (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
                 -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
             );
-            eye = concat(&view, &eye).normalized();
+            eye = Vec3::from(vecmath::vec3_normalized(
+                vecmath::row_mat3x4_transform_vec3(view, eye.into())));
 
             point_middle(ix, iy, &raytrace(ren, &mut vi, &mut eye, 0, 0));
         }

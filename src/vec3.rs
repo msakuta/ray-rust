@@ -1,6 +1,7 @@
 
 
 use std::ops::{Add, AddAssign, Sub, Mul};
+use std::convert::Into;
 
 #[derive(Clone, Debug, Copy)]
 pub struct Vec3{
@@ -85,32 +86,17 @@ impl Sub for &Vec3{
     }
 }
 
-
-pub type Mat4 = [[f32; 4]; 3];
-
-pub const MAT4IDENTITY: Mat4 = [[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.]];
-
-pub fn concat(m: &Mat4, v: &Vec3) -> Vec3{
-    Vec3{
-        x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3],
-        y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3],
-        z: m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3],
-        reserved: 0.
+// We cannot easily define Mat4 class with all the operator overloading,
+// so we give up and delegate to vecmath.
+impl Into<vecmath::Vector3<f32>> for Vec3{
+    fn into(self) -> vecmath::Vector3<f32> {
+        [self.x, self.y, self.z]
     }
 }
 
-
-pub fn matcat(m1: &Mat4, m2: &Mat4) -> Mat4{
-	let mut ret: Mat4 = MAT4IDENTITY;
-	for i in 0..3 {
-        for j in 0..4 {
-            ret[i][j] =
-                m1[i][0] * m2[0][j] +
-                m1[i][1] * m2[1][j] +
-                m1[i][2] * m2[2][j];
-        }
+impl From<vecmath::Vector3<f32>> for Vec3{
+    fn from(v: vecmath::Vector3<f32>) -> Self {
+        Self::new(v[0], v[1], v[2])
     }
-    ret
 }
-
 
