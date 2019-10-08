@@ -39,6 +39,7 @@ pub struct RenderMaterial{
 	pn: i32,			/* Phong model index */
 	t: f32, /* transparency, unit length per decay */
 	n: f32, /* refraction constant */
+    glow_dist: f32,
 	frac: RenderColor /* refraction per spectrum */
 }
 
@@ -62,8 +63,14 @@ impl RenderMaterial{
              pn,
              t,
              n,
+             glow_dist: 0.,
              frac: RenderColor::new(1., 1., 1.),
          }
+    }
+
+    pub fn glow_dist(mut self, v: f32) -> Self{
+        self.glow_dist = v;
+        self
     }
 
     pub fn frac(mut self, frac: RenderColor) -> Self{
@@ -92,6 +99,7 @@ trait RenderObjectInterface{
     fn get_specular(&self, position: &Vec3) -> RenderColor;
     fn get_normal(&self, position: &Vec3) -> Vec3;
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32;
+    fn distance(&self, vi: &Vec3) -> f32;
 }
 
 pub struct RenderSphere{
@@ -157,6 +165,10 @@ impl RenderObjectInterface for RenderSphere{
 
         ray_length
     }
+
+    fn distance(&self, vi: &Vec3) -> f32{
+        ((&self.org - vi).len() - self.r).max(0.)
+    }
 }
 
 pub struct RenderFloor{
@@ -217,6 +229,10 @@ impl RenderObjectInterface for RenderFloor{
         }
         ray_length
     }
+
+    fn distance(&self, vi: &Vec3) -> f32{
+        (vi - &self.org).dot(&self.face_normal).max(0.)
+    }
 }
 
 pub enum RenderObject{
@@ -242,7 +258,10 @@ pub struct RenderEnv{
     pub yfov: f32,
     pub objects: Vec<RenderObject>,
     pub light: Vec3,
-    pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
+    pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor,
+    pub use_raymarching: bool,
+    pub use_glow_effect: bool,
+    glow_effect: f32,
 }
 
 impl RenderEnv{
@@ -266,11 +285,25 @@ impl RenderEnv{
             objects,
             light: Vec3::new(0., 0., 1.),
             bgproc,
+            use_raymarching: false,
+            use_glow_effect: false,
+            glow_effect: 1.,
         }
     }
 
     pub fn light(mut self, light: Vec3) -> Self{
         self.light = light.normalized();
+        self
+    }
+
+    pub fn use_raymarching(mut self, f: bool) -> Self{
+        self.use_raymarching = f;
+        self
+    }
+
+    pub fn use_glow_effect(mut self, f: bool, v: f32) -> Self{
+        self.use_glow_effect = f;
+        self.glow_effect = v;
         self
     }
 }
@@ -312,10 +345,12 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
                 (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
                 -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
             );
-            eye = Vec3::from(vecmath::vec3_normalized(
-                vecmath::row_mat3x4_transform_vec3(view, eye.into())));
+            eye = Vec3::from(
+                vecmath::row_mat3x4_transform_vec3(view, eye.into())).normalized();
 
-            point_middle(ix, iy, raytrace(ren, &mut vi, &mut eye, 0, 0));
+            point_middle(ix, iy,
+                if ren.use_raymarching { raymarch } else
+                { raytrace }(ren, &mut vi, &mut eye, 0, None, 0) );
         }
     };
 
@@ -425,12 +460,24 @@ fn shading(ren: &RenderEnv,
     let (k1, k2) = {
         let ray: Vec3 = ren.light.clone();
         let k1 = 0.2;
-        let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
-        if t >= std::f32::INFINITY || 0. < ren.objects[i].get_interface().get_material().get_transparency() {
-            ((k1 + diffuse_intensity).min(1.), reflection_intensity)
+        if ren.use_raymarching {
+            let RaymarchSingleResult{
+                final_dist: _, idx, pos: _, iter, travel_dist, min_dist: _} = raymarch_single(ren, &reflected_ray, &ray, Some(&ren.objects[idx]));
+            if FAR_AWAY <= travel_dist || MAX_ITER <= iter || 0. < ren.objects[idx].get_interface().get_material().get_transparency() {
+                ((k1 + diffuse_intensity).min(1.), reflection_intensity)
+            }
+            else {
+                (k1, 0.)
+            }
         }
         else {
-            (k1, 0.)
+            let (t, i) = raycast(ren, &reflected_ray, &ray, Some(&ren.objects[idx]), 0);
+            if t >= std::f32::INFINITY || 0. < ren.objects[i].get_interface().get_material().get_transparency() {
+                ((k1 + diffuse_intensity).min(1.), reflection_intensity)
+            }
+            else {
+                (k1, 0.)
+            }
         }
     };
 
@@ -453,7 +500,9 @@ fn shading(ren: &RenderEnv,
             let mut ray = (eye + &(n * reference)).normalized();
             let eps = std::f32::EPSILON;
 			let mut pt3 = pt + &(&ray * eps);
-            raytrace(ren, &mut pt3, &mut ray, nest, if sp < 0. { OUTONLY } else { INONLY })
+            (if ren.use_raymarching { raymarch }
+                else { raytrace })(ren, &mut pt3, &mut ray, nest,
+                Some(&ren.objects[idx]), if sp < 0. { OUTONLY } else { INONLY })
 		};
 /*		t = raycast(ren, &reflectedRay, &ray, &i, &ren->objects[idx], OUTONLY);
 		if(t < INFINITY)
@@ -484,14 +533,14 @@ fn shading(ren: &RenderEnv,
 
 
 fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
-    mut lev: i32, mut flags: u32) -> RenderColor
+    mut lev: i32, init_ig: Option<&RenderObject>, mut flags: u32) -> RenderColor
 {
     let mut fcs = RenderColor::new(1., 1., 1.);
 
 	let mut ret_color = RenderColor::new(0., 0., 0.);
 /*	bgcolor(eye, pColor);*/
 
-    let mut ig: Option<&RenderObject> = None;
+    let mut ig: Option<&RenderObject> = init_ig;
 	loop {
 		lev += 1;
 		let (t, idx) = raycast(ren, vi, eye, ig, flags);
@@ -553,5 +602,170 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 	}
 
     ret_color
+}
+
+fn distance_estimate(ren: &RenderEnv, vi: &Vec3,
+    ig: Option<&RenderObject>) -> (f32, usize, f32)
+{
+    let mut closest_dist = std::f32::INFINITY;
+    let mut ret_idx = 0;
+    let mut glowing_dist = std::f32::INFINITY;
+
+    for (idx, obj) in ren.objects.iter().enumerate() {
+        if let Some(ignore_obj) = ig {
+            if ignore_obj as *const _ == obj as *const _ {
+                continue;
+            }
+        }
+
+        let dist = obj.get_interface().distance(vi);
+        if dist < closest_dist {
+            closest_dist = dist;
+            ret_idx = idx;
+        }
+
+        let glow = dist * obj.get_interface().get_material().glow_dist;
+        if 0. < glow && glow < glowing_dist {
+            glowing_dist = glow;
+        }
+    }
+
+    (closest_dist, ret_idx, glowing_dist)
+}
+
+const RAYMARCH_EPS: f32 = 1e-3;
+const FAR_AWAY: f32 = 1e4;
+const MAX_ITER: usize = 10000;
+
+struct RaymarchSingleResult{
+    final_dist: f32,
+    idx: usize,
+    pos: Vec3,
+    iter: usize,
+    travel_dist: f32,
+    min_dist: f32,
+}
+
+fn raymarch_single(ren: &RenderEnv, init_pos: &Vec3, eye: &Vec3, ig: Option<&RenderObject>)
+    -> RaymarchSingleResult
+{
+    let mut iter = 0;
+    let mut travel_dist = 0.;
+    let mut pos = *init_pos;
+    let mut min_dist = std::f32::INFINITY;
+    loop {
+        let (dist, idx, glowing_dist) = distance_estimate(ren, &pos, ig);
+        pos = &(&*eye * dist) + &pos;
+        travel_dist += dist;
+        iter += 1;
+        // let glowing_dist = ren.objects[idx].get_interface().get_glowing_dist();
+        if glowing_dist < min_dist {
+            min_dist = glowing_dist;
+        }
+        // println!("raymarch {:?} iter: {} pos: {:?}, dist: {}", eye, iter, pos, dist);
+        if dist < RAYMARCH_EPS || FAR_AWAY < dist || MAX_ITER < iter {
+            return RaymarchSingleResult{
+                final_dist: dist,
+                idx,
+                pos,
+                iter,
+                travel_dist,
+                min_dist,
+            }
+        }
+    }
+}
+
+fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
+    mut lev: i32, init_ig: Option<&RenderObject>, mut flags: u32) -> RenderColor
+{
+    // println!("using raymarch {:?}", eye);
+    let mut fcs = RenderColor::new(1., 1., 1.);
+    let mut pos = *vi;
+
+    let mut ret_color = RenderColor::new(0., 0., 0.);
+    let mut min_min_dist = std::f32::INFINITY;
+/*	bgcolor(eye, pColor);*/
+
+    let mut ig: Option<&RenderObject> = init_ig;
+    loop {
+        lev += 1;
+        let RaymarchSingleResult{
+            final_dist, idx, pos: pt, iter, travel_dist: _, min_dist} = raymarch_single(ren, &pos, eye, ig);
+        if min_dist < min_min_dist {
+            min_min_dist = min_dist;
+        }
+        if MAX_ITER < iter {
+            // println!("Max iter reached: {:?} dist: {} idx: {}", eye, dist, idx);
+        }
+        if final_dist < RAYMARCH_EPS {
+/*			t -= EPS;*/
+
+            /* safe point */
+            // What a terrible formula... it's almost impractical to use it everywhere.
+
+            let o = &ren.objects[idx].get_interface();
+            let n = o.get_normal(&pt);
+            // let face_color = RenderColor::new(travel_dist / 100. % 1., 0., 0.);
+            let face_color = shading(ren, idx,&n,&pt,eye, lev);
+            // if idx == 2 {
+                // println!("Hit {}: eye: {:?} normal: {:?} shading: {:?}", idx, eye, n, face_color);
+            // }
+
+            let ks = o.get_specular(&pt);
+
+            if 0 == (RIGNORE & flags) { ret_color.r += face_color.r * fcs.r; fcs.r *= ks.r; }
+            if 0 == (GIGNORE & flags) { ret_color.g += face_color.g * fcs.g; fcs.g *= ks.g; }
+            if 0 == (BIGNORE & flags) { ret_color.b += face_color.b * fcs.b; fcs.b *= ks.b; }
+            if idx == 0 {
+                break;
+            }
+
+			if (fcs.r + fcs.g + fcs.b) <= 0.1 {
+				break;
+            }
+
+			if lev >= MAX_REFLECTIONS {
+                break;
+            }
+
+			pos = pt.clone();
+			let en2 = -2.0 * eye.dot(&n);
+			*eye += &n * en2;
+
+			if n.dot(&eye) < 0. {
+                flags &= !INONLY;
+                flags |= OUTONLY;
+            }
+			else {
+                flags &= !OUTONLY;
+                flags |= INONLY;
+            }
+
+            ig = Some(&ren.objects[idx]);
+        }
+        else{
+            let fc2 = (ren.bgproc)(ren, eye);
+            ret_color.r	+= fc2.r * fcs.r;
+            ret_color.g	+= fc2.g * fcs.g;
+            ret_color.b	+= fc2.b * fcs.b;
+        }
+        if !(lev < MAX_REFLECTIONS) {
+            break;
+        }
+	}
+    // println!("raymarch loop end {:?}", eye);
+
+    (if ren.use_glow_effect {
+        let factor = if min_min_dist == std::f32::INFINITY { 1. }
+            else { 1. + (0. + ren.glow_effect * (0.99f32).powf(min_min_dist)) };
+        RenderColor::new(
+            factor * ret_color.r,
+            factor * ret_color.g,
+            factor * ret_color.b)
+    }
+    else{
+        ret_color
+    })
 }
 

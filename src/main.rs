@@ -20,19 +20,23 @@ use vec3::Vec3;
 fn main() -> std::io::Result<()> {
 
     if env::args().len() <= 1 {
-        println!("usage: {} [width] [height] [-o output] [-t thread_count]", env::args().nth(0).unwrap());
+        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist]", env::args().nth(0).unwrap());
         return Ok(());
     }
 
-    let (width, height, output, thread_count): (usize, usize, String, i32) = {
+    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect):
+        (usize, usize, String, i32, bool, bool, f32) = {
         let mut width = 640;
         let mut width_set = false;
         let mut height = 480;
         let mut height_set = false;
         let mut output = "foo.png".to_string();
+        let mut use_raymarching = false;
+        let mut use_glow_effect = false;
+        let mut glow_effect = 1.;
         let mut thread_count = 8;
         #[derive(PartialEq)]
-        enum Next{Default, Output, ThreadCount}
+        enum Next{Default, Output, ThreadCount, GlowEffect}
         let mut next = Next::Default;
         for arg in env::args().skip(1) {
             match next {
@@ -45,12 +49,23 @@ fn main() -> std::io::Result<()> {
                     assert!(1 <= thread_count);
                     next = Next::Default;
                 },
+                Next::GlowEffect => {
+                    glow_effect = arg.parse().expect("thread count must be an int");
+                    next = Next::Default;
+                },
                 _ => {
                     if arg == "-o" {
                         next = Next::Output;
                     }
                     else if arg == "-t" {
                         next = Next::ThreadCount;
+                    }
+                    else if arg == "-m" {
+                        use_raymarching = true;
+                    }
+                    else if arg == "-g" {
+                        use_glow_effect = true;
+                        next = Next::GlowEffect;
                     }
                     else if !width_set {
                         width = arg.parse().expect("width must be an int");
@@ -63,7 +78,7 @@ fn main() -> std::io::Result<()> {
                 }
             }
         }
-        (width, height, output, thread_count)
+        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -95,7 +110,8 @@ fn main() -> std::io::Result<()> {
         .frac(RenderColor::new(1., 1., 1.));
 
     let red_material = RenderMaterial::new(
-        RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 24, 0., 0.0);
+        RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 24, 0., 0.0)
+        .glow_dist(10.);
 
     let transparent_material = RenderMaterial::new(
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 1., 1.5)
@@ -158,7 +174,9 @@ fn main() -> std::io::Result<()> {
         //pointproc: putpoint, /* pointproc */
         objects,
         bgcolor, /* bgproc */
-    ).light(Vec3::new(50., 60., -50.));
+    ).light(Vec3::new(50., 60., -50.))
+    .use_raymarching(use_raymarching)
+    .use_glow_effect(use_glow_effect, glow_effect);
 
     let start = Instant::now();
 

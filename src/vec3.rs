@@ -24,10 +24,14 @@ impl Vec3{
         self.x*b.x
          + self.y*b.y
          + self.z*b.z
-    } 
+    }
+
+    pub fn squared_len(&self) -> f32{
+        (self.x * self.x + self.y * self.y + self.z * self.z)
+    }
 
     pub fn len(&self) -> f32 {
-        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+        self.squared_len().sqrt()
     }
 
     pub fn normalized(&self) -> Self {
