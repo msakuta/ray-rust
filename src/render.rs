@@ -175,14 +175,10 @@ impl RenderSphere{
     }
 
     fn deserialize(ren: &RenderEnv, serial: &RenderSphereSerial) -> Result<RenderObject, DeserializeError>{
-        let material = ren.materials.get(&serial.material);
-        match material {
-            Some(mat) =>
-                Ok(Self::new(mat.clone(),
-                    serial.r, serial.org)),
-            None =>
-                Err(DeserializeError::new("RenderSphere"))
-        }
+        Ok(Self::new(ren.materials.get(&serial.material)
+            .ok_or(DeserializeError::new(&format!("RenderSphere couldn't find material {}", serial.material)))?
+            .clone(),
+            serial.r, serial.org))
     }
 }
 
@@ -263,12 +259,10 @@ impl RenderFloor{
     }
 
     fn deserialize(ren: &RenderEnv, serial: &RenderFloorSerial) -> Result<RenderObject, DeserializeError>{
-        let material = ren.materials.get(&serial.material);
-        match material {
-            Some(mat) =>
-                Ok(Self::new(mat.clone(), serial.org, serial.face_normal)),
-            None => Err(DeserializeError::new("RenderFloor"))
-        }
+        Ok(Self::new(ren.materials.get(&serial.material)
+            .ok_or(DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
+            .clone(),
+            serial.org, serial.face_normal))
     }
 }
 
@@ -431,14 +425,10 @@ impl RenderEnv{
         self.objects.clear();
         for object in sceneobj.objects {
             match object {
-                RenderObjectSerial::Sphere(ref sobj) => {
-                    let robj = RenderSphere::deserialize(self, sobj)?;
-                    self.objects.push(robj);
-                }
-                RenderObjectSerial::Floor(ref sobj) => {
-                    let robj = RenderFloor::deserialize(self, sobj)?;
-                    self.objects.push(robj);
-                }
+                RenderObjectSerial::Sphere(ref sobj) =>
+                    self.objects.push(RenderSphere::deserialize(self, sobj)?),
+                RenderObjectSerial::Floor(ref sobj) =>
+                    self.objects.push(RenderFloor::deserialize(self, sobj)?),
             }
         }
         Ok(())

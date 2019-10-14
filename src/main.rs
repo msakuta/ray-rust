@@ -209,7 +209,8 @@ fn main() -> std::io::Result<()> {
         let mut file = std::fs::File::open(deserialize_file)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
-        ren.deserialize(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.s))?;
+        ren.deserialize(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,
+            "Deserialize error: ".to_string() + &e.s))?;
         // println!("deserialized {} materials and {} objects", ren.materials.len(), ren.objects.len());
         // for material in ren.materials.iter() {
         //     println!("  {:?}", material);
