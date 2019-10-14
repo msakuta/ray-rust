@@ -1,9 +1,14 @@
 extern crate image;
 extern crate crossbeam;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_yaml;
 
 use std::fs::File;
 use std::env;
 use std::time::Instant;
+use std::io::prelude::*;
 use image::png::PNGEncoder;
 use image::ColorType;
 
@@ -20,12 +25,12 @@ use vec3::Vec3;
 fn main() -> std::io::Result<()> {
 
     if env::args().len() <= 1 {
-        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist]", env::args().nth(0).unwrap());
+        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist] [-s serialized.yaml]", env::args().nth(0).unwrap());
         return Ok(());
     }
 
-    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect):
-        (usize, usize, String, i32, bool, bool, f32) = {
+    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file):
+        (usize, usize, String, i32, bool, bool, f32, String) = {
         let mut width = 640;
         let mut width_set = false;
         let mut height = 480;
@@ -35,8 +40,9 @@ fn main() -> std::io::Result<()> {
         let mut use_glow_effect = false;
         let mut glow_effect = 1.;
         let mut thread_count = 8;
+        let mut serialize_file = "".to_string();
         #[derive(PartialEq)]
-        enum Next{Default, Output, ThreadCount, GlowEffect}
+        enum Next{Default, Output, ThreadCount, GlowEffect, SerializeFile}
         let mut next = Next::Default;
         for arg in env::args().skip(1) {
             match next {
@@ -53,7 +59,11 @@ fn main() -> std::io::Result<()> {
                     glow_effect = arg.parse().expect("thread count must be an int");
                     next = Next::Default;
                 },
-                _ => {
+                Next::SerializeFile => {
+                    serialize_file = arg;
+                    next = Next::Default;
+                }
+                Next::Default => {
                     if arg == "-o" {
                         next = Next::Output;
                     }
@@ -67,6 +77,9 @@ fn main() -> std::io::Result<()> {
                         use_glow_effect = true;
                         next = Next::GlowEffect;
                     }
+                    else if arg == "-s" {
+                        next = Next::SerializeFile;
+                    }
                     else if !width_set {
                         width = arg.parse().expect("width must be an int");
                         width_set = true;
@@ -78,7 +91,7 @@ fn main() -> std::io::Result<()> {
                 }
             }
         }
-        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect)
+        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -102,18 +115,18 @@ fn main() -> std::io::Result<()> {
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
 
-    let floor_material = RenderMaterial::new(
+    let floor_material = RenderMaterial::new("floor".to_string(),
         RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0);
 
-    let mirror_material = RenderMaterial::new(
+    let mirror_material = RenderMaterial::new("mirror".to_string(),
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(1.0, 1.0, 1.0), 24, 0., 0.0)
         .frac(RenderColor::new(1., 1., 1.));
 
-    let red_material = RenderMaterial::new(
+    let red_material = RenderMaterial::new("red".to_string(),
         RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 24, 0., 0.0)
-        .glow_dist(10.);
+        .glow_dist(5.);
 
-    let transparent_material = RenderMaterial::new(
+    let transparent_material = RenderMaterial::new("transparent".to_string(),
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 1., 1.5)
         .frac(RenderColor::new(1.49998, 1.49999, 1.5));
 
@@ -177,6 +190,11 @@ fn main() -> std::io::Result<()> {
     ).light(Vec3::new(50., 60., -50.))
     .use_raymarching(use_raymarching)
     .use_glow_effect(use_glow_effect, glow_effect);
+
+    if serialize_file != "" {
+        let mut file = std::fs::File::create(serialize_file)?;
+        file.write_all(&ren.serialize()?.bytes().collect::<Vec<u8>>())?;
+    }
 
     let start = Instant::now();
 

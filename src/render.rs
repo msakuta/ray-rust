@@ -1,6 +1,7 @@
 
 use crate::vec3::Vec3;
 use vecmath;
+use std::collections::HashMap;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -15,7 +16,7 @@ const BIGNORE: u32 = (1<<4);
 // const GONLY: u32 = (RIGNORE|BIGNORE);
 // const BONLY: u32 = (RIGNORE|GIGNORE);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderColor{
     pub r: f32,
     pub g: f32,
@@ -32,8 +33,9 @@ impl RenderColor{
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RenderMaterial{
+    name: String,
 	diffuse: RenderColor, /* Diffuse(R,G,B) */
 	specular: RenderColor,/* Specular(R,G,B) */
 	pn: i32,			/* Phong model index */
@@ -51,6 +53,7 @@ trait RenderMaterialInterface{
 
 impl RenderMaterial{
     pub fn new(
+        name: String,
         diffuse: RenderColor,
         specular: RenderColor,
         pn: i32,
@@ -58,6 +61,7 @@ impl RenderMaterial{
         n: f32)
      -> RenderMaterial{
          RenderMaterial{
+             name,
              diffuse,
              specular,
              pn,
@@ -93,13 +97,34 @@ impl RenderMaterialInterface for RenderMaterial{
     }
 }
 
-trait RenderObjectInterface{
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RenderSphereSerial{
+    material: String,
+    r: f32,
+    org: Vec3,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RenderFloorSerial{
+    material: String,
+    org: Vec3,		/* Center */
+    face_normal: Vec3,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum RenderObjectSerial{
+    Sphere(RenderSphereSerial),
+    Floor(RenderFloorSerial),
+}
+
+pub trait RenderObjectInterface{
     fn get_material(&self) -> &RenderMaterial;
     fn get_diffuse(&self, position: &Vec3) -> RenderColor;
     fn get_specular(&self, position: &Vec3) -> RenderColor;
     fn get_normal(&self, position: &Vec3) -> Vec3;
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32;
     fn distance(&self, vi: &Vec3) -> f32;
+    fn serialize(&self) -> RenderObjectSerial;
 }
 
 pub struct RenderSphere{
@@ -169,6 +194,14 @@ impl RenderObjectInterface for RenderSphere{
     fn distance(&self, vi: &Vec3) -> f32{
         ((&self.org - vi).len() - self.r).max(0.)
     }
+
+    fn serialize(&self) -> RenderObjectSerial{
+        RenderObjectSerial::Sphere(RenderSphereSerial{
+            material: self.material.name.clone(),
+            org: self.org,
+            r: self.r,
+        })
+    }
 }
 
 pub struct RenderFloor{
@@ -233,6 +266,14 @@ impl RenderObjectInterface for RenderFloor{
     fn distance(&self, vi: &Vec3) -> f32{
         (vi - &self.org).dot(&self.face_normal).max(0.)
     }
+
+    fn serialize(&self) -> RenderObjectSerial{
+        RenderObjectSerial::Floor(RenderFloorSerial{
+            material: self.material.name.clone(),
+            org: self.org,
+            face_normal: self.face_normal,
+        })
+    }
 }
 
 pub enum RenderObject{
@@ -241,7 +282,7 @@ pub enum RenderObject{
 }
 
 impl RenderObject{
-    fn get_interface(&self) -> &RenderObjectInterface{
+    pub fn get_interface(&self) -> &RenderObjectInterface{
         match self {
             RenderObject::Sphere(obj) => obj as &RenderObjectInterface,
             RenderObject::Floor(obj) => obj as &RenderObjectInterface,
@@ -305,6 +346,25 @@ impl RenderEnv{
         self.use_glow_effect = f;
         self.glow_effect = v;
         self
+    }
+
+    pub fn serialize(&self) -> Result<String, std::io::Error>{
+        #[derive(Serialize, Deserialize)]
+        struct Scene{
+            materials: HashMap<String, RenderMaterial>,
+            objects: Vec<RenderObjectSerial>,
+        }
+        let mut sceneobj = Scene{
+            materials: HashMap::new(),
+            objects: self.objects.iter().map(|o| o.get_interface().serialize()).collect(),
+        };
+        for object in &self.objects {
+            let material = object.get_interface().get_material();
+            sceneobj.materials.insert(material.name.clone(), material.clone());
+        }
+        Ok(serde_yaml::to_string(&sceneobj)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
+        // println!("{}", scene);
     }
 }
 
