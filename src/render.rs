@@ -2,6 +2,7 @@
 use crate::vec3::Vec3;
 use vecmath;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -128,14 +129,14 @@ pub trait RenderObjectInterface{
 }
 
 pub struct RenderSphere{
-    material: RenderMaterial,
+    material: Arc<RenderMaterial>,
     r: f32,			/* Radius */
     org: Vec3,		/* Center */
 }
 
 impl RenderSphere{
     pub fn new(
-        material: RenderMaterial,
+        material: Arc<RenderMaterial>,
         r: f32,
         org: Vec3
     ) -> RenderObject {
@@ -205,14 +206,14 @@ impl RenderObjectInterface for RenderSphere{
 }
 
 pub struct RenderFloor{
-    material: RenderMaterial,
+    material: Arc<RenderMaterial>,
     org: Vec3,		/* Center */
     face_normal: Vec3,
 }
 
 impl RenderFloor{
     pub fn new(
-        material: RenderMaterial,
+        material: Arc<RenderMaterial>,
         org: Vec3,
         face_normal: Vec3,
     ) -> RenderObject {
@@ -284,8 +285,8 @@ pub enum RenderObject{
 impl RenderObject{
     pub fn get_interface(&self) -> &RenderObjectInterface{
         match self {
-            RenderObject::Sphere(obj) => obj as &RenderObjectInterface,
-            RenderObject::Floor(obj) => obj as &RenderObjectInterface,
+            RenderObject::Sphere(ref obj) => obj as &RenderObjectInterface,
+            RenderObject::Floor(ref obj) => obj as &RenderObjectInterface,
         }
     }
 }
@@ -297,6 +298,12 @@ pub struct RenderEnv{
     pub yres: i32,
     pub xfov: f32,
     pub yfov: f32,
+    // Materials are stored in a string map, whose key is a string.
+    // A material is stored in Arc in order to share between global material list
+    // and each object. I'm not sure if it's better than embedding into each object.
+    // We wanted to but cannot use reference (borrow checker gets mad about enums)
+    // nor Rc (multithreading gets mad).
+    pub materials: HashMap<String, Arc<RenderMaterial>>,
     pub objects: Vec<RenderObject>,
     pub light: Vec3,
     pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor,
@@ -313,6 +320,7 @@ impl RenderEnv{
         yres: i32,
         xfov: f32,
         yfov: f32,
+        materials: HashMap<String, Arc<RenderMaterial>>,
         objects: Vec<RenderObject>,
         bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
     ) -> Self{
@@ -323,6 +331,7 @@ impl RenderEnv{
             yres,
             xfov,
             yfov,
+            materials,
             objects,
             light: Vec3::new(0., 0., 1.),
             bgproc,

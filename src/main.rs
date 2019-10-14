@@ -9,6 +9,8 @@ use std::fs::File;
 use std::env;
 use std::time::Instant;
 use std::io::prelude::*;
+use std::collections::HashMap;
+use std::sync::Arc;
 use image::png::PNGEncoder;
 use image::ColorType;
 
@@ -115,24 +117,27 @@ fn main() -> std::io::Result<()> {
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
 
-    let floor_material = RenderMaterial::new("floor".to_string(),
-        RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0);
+    let mut materials: HashMap<String, Arc<RenderMaterial>> = HashMap::new();
 
-    let mirror_material = RenderMaterial::new("mirror".to_string(),
+    let floor_material = Arc::new(RenderMaterial::new("floor".to_string(),
+        RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0));
+    materials.insert("floor".to_string(), floor_material.clone());
+
+    let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(1.0, 1.0, 1.0), 24, 0., 0.0)
-        .frac(RenderColor::new(1., 1., 1.));
+        .frac(RenderColor::new(1., 1., 1.)));
 
-    let red_material = RenderMaterial::new("red".to_string(),
+    let red_material = Arc::new(RenderMaterial::new("red".to_string(),
         RenderColor::new(0.8, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0), 24, 0., 0.0)
-        .glow_dist(5.);
+        .glow_dist(5.));
 
-    let transparent_material = RenderMaterial::new("transparent".to_string(),
+    let transparent_material = Arc::new(RenderMaterial::new("transparent".to_string(),
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 1., 1.5)
-        .frac(RenderColor::new(1.49998, 1.49999, 1.5));
+        .frac(RenderColor::new(1.49998, 1.49999, 1.5)));
 
     let objects: Vec<RenderObject> = vec!{
     /* Plane */
-        RenderFloor::new (floor_material,       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.)),
+        RenderFloor::new (materials.get("floor").unwrap().clone(),       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.)),
         // RenderFloor::new (floor_material,       Vec3::new(-300.0,   0.0,  0.0),  Vec3::new(1., 0., 0.)),
     /* Spheres */
         RenderSphere::new(mirror_material.clone(), 80.0, Vec3::new(   0.0, -30.0,172.0)),
@@ -185,6 +190,7 @@ fn main() -> std::io::Result<()> {
         xfov,
         yfov, /* xfov, yfov*/
         //pointproc: putpoint, /* pointproc */
+        materials,
         objects,
         bgcolor, /* bgproc */
     ).light(Vec3::new(50., 60., -50.))
