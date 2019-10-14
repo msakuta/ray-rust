@@ -18,7 +18,7 @@ mod render;
 mod vec3;
 
 use render::{RenderColor,
-    RenderMaterial,
+    RenderMaterial, RenderPattern,
     RenderObject, RenderSphere, RenderFloor,
     RenderEnv, render};
 use vec3::Vec3;
@@ -128,7 +128,9 @@ fn main() -> std::io::Result<()> {
     let mut materials: HashMap<String, Arc<RenderMaterial>> = HashMap::new();
 
     let floor_material = Arc::new(RenderMaterial::new("floor".to_string(),
-        RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0));
+        RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0)
+        .pattern(RenderPattern::RepeatedGradation)
+        .pattern_scale(300.));
     materials.insert("floor".to_string(), floor_material.clone());
 
     let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),

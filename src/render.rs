@@ -35,21 +35,29 @@ impl RenderColor{
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RenderPattern{
+    Solid, Checkerboard, RepeatedGradation
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterial{
     name: String,
-	diffuse: RenderColor, /* Diffuse(R,G,B) */
-	specular: RenderColor,/* Specular(R,G,B) */
-	pn: i32,			/* Phong model index */
-	t: f32, /* transparency, unit length per decay */
-	n: f32, /* refraction constant */
+    diffuse: RenderColor, /* Diffuse(R,G,B) */
+    specular: RenderColor,/* Specular(R,G,B) */
+    pn: i32,			/* Phong model index */
+    t: f32, /* transparency, unit length per decay */
+    n: f32, /* refraction constant */
     glow_dist: f32,
-	frac: RenderColor /* refraction per spectrum */
+    frac: RenderColor, /* refraction per spectrum */
+    pattern: RenderPattern,
+    pattern_scale: f32,
 }
 
 trait RenderMaterialInterface{
     fn get_phong_number(&self) -> i32;
     fn get_transparency(&self) -> f32;
     fn get_refraction_index(&self) -> f32;
+    fn lookup_texture(&self, pos: &Vec3) -> RenderColor;
 }
 
 impl RenderMaterial{
@@ -70,6 +78,8 @@ impl RenderMaterial{
              n,
              glow_dist: 0.,
              frac: RenderColor::new(1., 1., 1.),
+             pattern: RenderPattern::Solid,
+             pattern_scale: 1.,
          }
     }
 
@@ -87,6 +97,16 @@ impl RenderMaterial{
         self.frac = frac;
         self
     }
+
+    pub fn pattern(mut self, pattern: RenderPattern) -> Self{
+        self.pattern = pattern;
+        self
+    }
+
+    pub fn pattern_scale(mut self, pattern_scale: f32) -> Self{
+        self.pattern_scale = pattern_scale;
+        self
+    }
 }
 
 impl RenderMaterialInterface for RenderMaterial{
@@ -100,6 +120,28 @@ impl RenderMaterialInterface for RenderMaterial{
 
     fn get_refraction_index(&self) -> f32{
         self.n
+    }
+
+    fn lookup_texture(&self, pos: &Vec3) -> RenderColor{
+        match self.pattern {
+            RenderPattern::Solid => self.diffuse.clone(),
+            RenderPattern::Checkerboard => {
+                let ix = (pos.x / self.pattern_scale) as i32;
+                let iy = (pos.z / self.pattern_scale) as i32;
+                (if (ix + iy) % 2 == 0 {
+                    RenderColor::new(0., 0., 0.)
+                } else {
+                    self.diffuse.clone()
+                })
+            }
+            RenderPattern::RepeatedGradation => {
+                RenderColor::new(
+                    self.diffuse.r * (50. + (pos.x) / self.pattern_scale) % 1.,
+                    self.diffuse.g * (50. + (pos.z) / self.pattern_scale) % 1.,
+                    self.diffuse.b
+                )
+            }
+        }
     }
 }
 
@@ -187,8 +229,8 @@ impl RenderObjectInterface for RenderSphere{
         &self.material
     }
 
-    fn get_diffuse(&self, _position: &Vec3) -> RenderColor{
-        self.material.diffuse.clone()
+    fn get_diffuse(&self, position: &Vec3) -> RenderColor{
+        self.material.lookup_texture(position)
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -272,17 +314,7 @@ impl RenderObjectInterface for RenderFloor{
     }
 
     fn get_diffuse(&self, pt: &Vec3) -> RenderColor{
-        RenderColor::new(
-            self.material.diffuse.r * (50. + (pt.x - self.org.x) / 300.) % 1.,
-            self.material.diffuse.g * (50. + (pt.z - self.org.z) / 300.) % 1.,
-            self.material.diffuse.b
-        )
-/*	{
-	double d, dd;
-	d = fmod(50. + (pt->x - ths->org.x) / 300., 1.) - .5;
-	dd = fmod(50. + (pt->z - ths->org.z) / 300., 1.) - .5;
-	kd->r = kd->g = kd->b = .5 / (250. * (d * d * dd * dd) + 1.);
-	}*/
+        self.material.lookup_texture(pt)
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
