@@ -34,7 +34,7 @@ impl RenderColor{
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterial{
     name: String,
 	diffuse: RenderColor, /* Diffuse(R,G,B) */
@@ -71,6 +71,11 @@ impl RenderMaterial{
              glow_dist: 0.,
              frac: RenderColor::new(1., 1., 1.),
          }
+    }
+
+    #[allow(dead_code)]
+    pub fn get_name(&self) -> &str{
+        &self.name
     }
 
     pub fn glow_dist(mut self, v: f32) -> Self{
@@ -118,6 +123,28 @@ pub enum RenderObjectSerial{
     Floor(RenderFloorSerial),
 }
 
+pub struct DeserializeError{
+    pub s: String,
+}
+
+impl DeserializeError{
+    fn new(s: &str) -> Self{
+        DeserializeError{s: s.to_string()}
+    }
+}
+
+impl Into<std::io::Error> for DeserializeError{
+    fn into(self) -> std::io::Error{
+        std::io::Error::new(std::io::ErrorKind::Other, "Deserialize error: ".to_string() + &self.s)
+    }
+}
+
+impl From<serde_yaml::Error> for DeserializeError{
+    fn from(_e: serde_yaml::Error) -> DeserializeError{
+        DeserializeError{s: "serde_yaml::Error".to_string()}
+    }
+}
+
 pub trait RenderObjectInterface{
     fn get_material(&self) -> &RenderMaterial;
     fn get_diffuse(&self, position: &Vec3) -> RenderColor;
@@ -145,6 +172,17 @@ impl RenderSphere{
             r,
             org,
         })
+    }
+
+    fn deserialize(ren: &RenderEnv, serial: &RenderSphereSerial) -> Result<RenderObject, DeserializeError>{
+        let material = ren.materials.get(&serial.material);
+        match material {
+            Some(mat) =>
+                Ok(Self::new(mat.clone(),
+                    serial.r, serial.org)),
+            None =>
+                Err(DeserializeError::new("RenderSphere"))
+        }
     }
 }
 
@@ -222,6 +260,15 @@ impl RenderFloor{
             face_normal,
             org,
         })
+    }
+
+    fn deserialize(ren: &RenderEnv, serial: &RenderFloorSerial) -> Result<RenderObject, DeserializeError>{
+        let material = ren.materials.get(&serial.material);
+        match material {
+            Some(mat) =>
+                Ok(Self::new(mat.clone(), serial.org, serial.face_normal)),
+            None => Err(DeserializeError::new("RenderFloor"))
+        }
     }
 }
 
@@ -312,6 +359,13 @@ pub struct RenderEnv{
     glow_effect: f32,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Scene{
+    materials: HashMap<String, RenderMaterial>,
+    objects: Vec<RenderObjectSerial>,
+}
+
+
 impl RenderEnv{
     pub fn new(
         cam: Vec3, /* camera position */
@@ -358,11 +412,6 @@ impl RenderEnv{
     }
 
     pub fn serialize(&self) -> Result<String, std::io::Error>{
-        #[derive(Serialize, Deserialize)]
-        struct Scene{
-            materials: HashMap<String, RenderMaterial>,
-            objects: Vec<RenderObjectSerial>,
-        }
         let mut sceneobj = Scene{
             materials: HashMap::new(),
             objects: self.objects.iter().map(|o| o.get_interface().serialize()).collect(),
@@ -374,6 +423,25 @@ impl RenderEnv{
         Ok(serde_yaml::to_string(&sceneobj)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
         // println!("{}", scene);
+    }
+
+    pub fn deserialize(&mut self, s: &str) -> Result<(), DeserializeError>{
+        let sceneobj = serde_yaml::from_str::<Scene>(s)?;
+        self.materials = sceneobj.materials.into_iter().map(|m| (m.0, Arc::new(m.1))).collect();
+        self.objects.clear();
+        for object in sceneobj.objects {
+            match object {
+                RenderObjectSerial::Sphere(ref sobj) => {
+                    let robj = RenderSphere::deserialize(self, sobj)?;
+                    self.objects.push(robj);
+                }
+                RenderObjectSerial::Floor(ref sobj) => {
+                    let robj = RenderFloor::deserialize(self, sobj)?;
+                    self.objects.push(robj);
+                }
+            }
+        }
+        Ok(())
     }
 }
 

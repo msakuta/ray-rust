@@ -27,12 +27,12 @@ use vec3::Vec3;
 fn main() -> std::io::Result<()> {
 
     if env::args().len() <= 1 {
-        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist] [-s serialized.yaml]", env::args().nth(0).unwrap());
+        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist] [-s serialized.yaml] [-d serialized.yaml]", env::args().nth(0).unwrap());
         return Ok(());
     }
 
-    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file):
-        (usize, usize, String, i32, bool, bool, f32, String) = {
+    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file):
+        (usize, usize, String, i32, bool, bool, f32, String, String) = {
         let mut width = 640;
         let mut width_set = false;
         let mut height = 480;
@@ -43,8 +43,9 @@ fn main() -> std::io::Result<()> {
         let mut glow_effect = 1.;
         let mut thread_count = 8;
         let mut serialize_file = "".to_string();
+        let mut deserialize_file = "".to_string();
         #[derive(PartialEq)]
-        enum Next{Default, Output, ThreadCount, GlowEffect, SerializeFile}
+        enum Next{Default, Output, ThreadCount, GlowEffect, SerializeFile, DeserializeFile}
         let mut next = Next::Default;
         for arg in env::args().skip(1) {
             match next {
@@ -65,6 +66,10 @@ fn main() -> std::io::Result<()> {
                     serialize_file = arg;
                     next = Next::Default;
                 }
+                Next::DeserializeFile => {
+                    deserialize_file = arg;
+                    next = Next::Default;
+                }
                 Next::Default => {
                     if arg == "-o" {
                         next = Next::Output;
@@ -82,6 +87,9 @@ fn main() -> std::io::Result<()> {
                     else if arg == "-s" {
                         next = Next::SerializeFile;
                     }
+                    else if arg == "-d" {
+                        next = Next::DeserializeFile;
+                    }
                     else if !width_set {
                         width = arg.parse().expect("width must be an int");
                         width_set = true;
@@ -93,7 +101,7 @@ fn main() -> std::io::Result<()> {
                 }
             }
         }
-        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file)
+        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -196,6 +204,20 @@ fn main() -> std::io::Result<()> {
     ).light(Vec3::new(50., 60., -50.))
     .use_raymarching(use_raymarching)
     .use_glow_effect(use_glow_effect, glow_effect);
+
+    if deserialize_file != "" {
+        let mut file = std::fs::File::open(deserialize_file)?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)?;
+        ren.deserialize(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.s))?;
+        // println!("deserialized {} materials and {} objects", ren.materials.len(), ren.objects.len());
+        // for material in ren.materials.iter() {
+        //     println!("  {:?}", material);
+        // }
+        // for (i, object) in ren.objects.iter().enumerate() {
+        //     println!("  [{}]: {}", i, object.get_interface().get_material().get_name());
+        // }
+    }
 
     if serialize_file != "" {
         let mut file = std::fs::File::create(serialize_file)?;
