@@ -128,7 +128,7 @@ fn main() -> std::io::Result<()> {
     let mut materials: HashMap<String, Arc<RenderMaterial>> = HashMap::new();
 
     let floor_material = Arc::new(RenderMaterial::new("floor".to_string(),
-        RenderColor::new(0.5, 0.5, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0)
+        RenderColor::new(1.0, 1.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0)
         .pattern(RenderPattern::RepeatedGradation)
         .pattern_scale(300.));
     materials.insert("floor".to_string(), floor_material.clone());

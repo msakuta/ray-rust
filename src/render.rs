@@ -126,8 +126,8 @@ impl RenderMaterialInterface for RenderMaterial{
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
-                let ix = (pos.x / self.pattern_scale) as i32;
-                let iy = (pos.z / self.pattern_scale) as i32;
+                let ix = (pos.x / self.pattern_scale).floor() as i32;
+                let iy = (pos.z / self.pattern_scale).floor() as i32;
                 (if (ix + iy) % 2 == 0 {
                     RenderColor::new(0., 0., 0.)
                 } else {
@@ -135,9 +135,12 @@ impl RenderMaterialInterface for RenderMaterial{
                 })
             }
             RenderPattern::RepeatedGradation => {
+                fn fmod(f: f32, freq: f32) -> f32{
+                    f - (f / freq).floor() * freq
+                }
                 RenderColor::new(
-                    self.diffuse.r * (50. + (pos.x) / self.pattern_scale) % 1.,
-                    self.diffuse.g * (50. + (pos.z) / self.pattern_scale) % 1.,
+                    self.diffuse.r * fmod((pos.x) / self.pattern_scale, 1.),
+                    self.diffuse.g * fmod((pos.z) / self.pattern_scale, 1.),
                     self.diffuse.b
                 )
             }
