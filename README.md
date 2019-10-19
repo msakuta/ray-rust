@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/msakuta/ray-rust.svg?style=svg)](https://circleci.com/gh/msakuta/ray-rust)
+
 # Ray-rust
 
 A very simple Rust implementation of ray tracing renderer.
