@@ -39,6 +39,11 @@ pub enum RenderPattern{
     Solid, Checkerboard, RepeatedGradation
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+enum UVMap{
+    XY, YZ, ZX, LL,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterial{
     name: String,
@@ -57,7 +62,7 @@ trait RenderMaterialInterface{
     fn get_phong_number(&self) -> i32;
     fn get_transparency(&self) -> f32;
     fn get_refraction_index(&self) -> f32;
-    fn lookup_texture(&self, pos: &Vec3) -> RenderColor;
+    fn lookup_texture(&self, pos: &Vec3, uvmap: &UVMap) -> RenderColor;
 }
 
 impl RenderMaterial{
@@ -122,7 +127,7 @@ impl RenderMaterialInterface for RenderMaterial{
         self.n
     }
 
-    fn lookup_texture(&self, pos: &Vec3) -> RenderColor{
+    fn lookup_texture(&self, pos: &Vec3, uvmap: &UVMap) -> RenderColor{
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
@@ -153,6 +158,7 @@ pub struct RenderSphereSerial{
     material: String,
     r: f32,
     org: Vec3,
+    uvmap: UVMap,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -160,6 +166,7 @@ pub struct RenderFloorSerial{
     material: String,
     org: Vec3,		/* Center */
     face_normal: Vec3,
+    uvmap: UVMap,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -204,26 +211,47 @@ pub struct RenderSphere{
     material: Arc<RenderMaterial>,
     r: f32,			/* Radius */
     org: Vec3,		/* Center */
+    uvmap: UVMap,
 }
 
 impl RenderSphere{
     pub fn new(
         material: Arc<RenderMaterial>,
         r: f32,
-        org: Vec3
+        org: Vec3,
     ) -> RenderObject {
-        RenderObject::Sphere(RenderSphere{
+        RenderObject::Sphere(RenderSphere::new_raw(
             material,
             r,
             org,
-        })
+        ))
+    }
+
+    fn new_raw(
+        material: Arc<RenderMaterial>,
+        r: f32,
+        org: Vec3,
+    ) -> RenderSphere {
+        RenderSphere{
+            material,
+            r,
+            org,
+            uvmap: UVMap::XY,
+        }
+    }
+
+    fn uvmap(mut self, v: UVMap) -> Self{
+        self.uvmap = v;
+        self
     }
 
     fn deserialize(ren: &RenderEnv, serial: &RenderSphereSerial) -> Result<RenderObject, DeserializeError>{
-        Ok(Self::new(ren.materials.get(&serial.material)
+        Ok(RenderObject::Sphere(
+            Self::new_raw(ren.materials.get(&serial.material)
             .ok_or(DeserializeError::new(&format!("RenderSphere couldn't find material {}", serial.material)))?
             .clone(),
-            serial.r, serial.org))
+            serial.r, serial.org)
+            .uvmap(serial.uvmap.clone())))
     }
 }
 
@@ -233,7 +261,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(position)
+        self.material.lookup_texture(position, &self.uvmap)
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -280,6 +308,7 @@ impl RenderObjectInterface for RenderSphere{
             material: self.material.name.clone(),
             org: self.org,
             r: self.r,
+            uvmap: self.uvmap.clone(),
         })
     }
 }
@@ -288,6 +317,7 @@ pub struct RenderFloor{
     material: Arc<RenderMaterial>,
     org: Vec3,		/* Center */
     face_normal: Vec3,
+    uvmap: UVMap,
 }
 
 impl RenderFloor{
@@ -296,18 +326,37 @@ impl RenderFloor{
         org: Vec3,
         face_normal: Vec3,
     ) -> RenderObject {
-        RenderObject::Floor(RenderFloor{
+        RenderObject::Floor(RenderFloor::new_raw(
             material,
             face_normal,
             org,
-        })
+        ))
+    }
+
+    fn new_raw(
+        material: Arc<RenderMaterial>,
+        org: Vec3,
+        face_normal: Vec3,
+    ) -> RenderFloor {
+        RenderFloor{
+            material,
+            face_normal,
+            org,
+            uvmap: UVMap::XY,
+        }
+    }
+
+    fn uvmap(mut self, uvmap: UVMap) -> Self{
+        self.uvmap = uvmap;
+        self
     }
 
     fn deserialize(ren: &RenderEnv, serial: &RenderFloorSerial) -> Result<RenderObject, DeserializeError>{
-        Ok(Self::new(ren.materials.get(&serial.material)
+        Ok(RenderObject::Floor(Self::new_raw(ren.materials.get(&serial.material)
             .ok_or(DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
             .clone(),
-            serial.org, serial.face_normal))
+            serial.org, serial.face_normal)
+            .uvmap(serial.uvmap.clone())))
     }
 }
 
@@ -317,7 +366,7 @@ impl RenderObjectInterface for RenderFloor{
     }
 
     fn get_diffuse(&self, pt: &Vec3) -> RenderColor{
-        self.material.lookup_texture(pt)
+        self.material.lookup_texture(pt, &self.uvmap)
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -349,6 +398,7 @@ impl RenderObjectInterface for RenderFloor{
             material: self.material.name.clone(),
             org: self.org,
             face_normal: self.face_normal,
+            uvmap: self.uvmap.clone(),
         })
     }
 }
