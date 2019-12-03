@@ -18,6 +18,7 @@ mod render;
 mod vec3;
 
 use render::{RenderColor,
+    UVMap,
     RenderMaterial, RenderPattern,
     RenderObject, RenderSphere, RenderFloor,
     RenderEnv, render};
@@ -147,7 +148,10 @@ fn main() -> std::io::Result<()> {
 
     let objects: Vec<RenderObject> = vec!{
     /* Plane */
-        RenderFloor::new (materials.get("floor").unwrap().clone(),       Vec3::new(  0.0, -500.0,  0.0),  Vec3::new(0., 1., 0.)),
+        RenderObject::Floor(
+            RenderFloor::new_raw(materials.get("floor").unwrap().clone(),       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.))
+            .uvmap(UVMap::ZX),
+        ),
         // RenderFloor::new (floor_material,       Vec3::new(-300.0,   0.0,  0.0),  Vec3::new(1., 0., 0.)),
     /* Spheres */
         RenderSphere::new(mirror_material.clone(), 80.0, Vec3::new(   0.0, -30.0,172.0)),

@@ -40,7 +40,7 @@ pub enum RenderPattern{
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-enum UVMap{
+pub enum UVMap{
     XY, YZ, ZX, LL,
 }
 
@@ -128,11 +128,17 @@ impl RenderMaterialInterface for RenderMaterial{
     }
 
     fn lookup_texture(&self, pos: &Vec3, uvmap: &UVMap) -> RenderColor{
+        let (u, v) = match uvmap {
+            UVMap::XY => (pos.x, pos.y),
+            UVMap::YZ => (pos.y, pos.z),
+            UVMap::ZX => (pos.z, pos.x),
+            UVMap::LL => (pos.x + pos.y, pos.y + pos.z),
+        };
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
-                let ix = (pos.x / self.pattern_scale).floor() as i32;
-                let iy = (pos.z / self.pattern_scale).floor() as i32;
+                let ix = (u / self.pattern_scale).floor() as i32;
+                let iy = (v / self.pattern_scale).floor() as i32;
                 (if (ix + iy) % 2 == 0 {
                     RenderColor::new(0., 0., 0.)
                 } else {
@@ -144,8 +150,8 @@ impl RenderMaterialInterface for RenderMaterial{
                     f - (f / freq).floor() * freq
                 }
                 RenderColor::new(
-                    self.diffuse.r * fmod((pos.x) / self.pattern_scale, 1.),
-                    self.diffuse.g * fmod((pos.z) / self.pattern_scale, 1.),
+                    self.diffuse.r * fmod((u) / self.pattern_scale, 1.),
+                    self.diffuse.g * fmod((v) / self.pattern_scale, 1.),
                     self.diffuse.b
                 )
             }
@@ -321,6 +327,7 @@ pub struct RenderFloor{
 }
 
 impl RenderFloor{
+    #[allow(dead_code)]
     pub fn new(
         material: Arc<RenderMaterial>,
         org: Vec3,
@@ -328,25 +335,25 @@ impl RenderFloor{
     ) -> RenderObject {
         RenderObject::Floor(RenderFloor::new_raw(
             material,
-            face_normal,
             org,
+            face_normal,
         ))
     }
 
-    fn new_raw(
+    pub fn new_raw(
         material: Arc<RenderMaterial>,
         org: Vec3,
         face_normal: Vec3,
     ) -> RenderFloor {
         RenderFloor{
             material,
-            face_normal,
             org,
+            face_normal,
             uvmap: UVMap::XY,
         }
     }
 
-    fn uvmap(mut self, uvmap: UVMap) -> Self{
+    pub fn uvmap(mut self, uvmap: UVMap) -> Self{
         self.uvmap = uvmap;
         self
     }
