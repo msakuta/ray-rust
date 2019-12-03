@@ -131,7 +131,8 @@ fn main() -> std::io::Result<()> {
     let floor_material = Arc::new(RenderMaterial::new("floor".to_string(),
         RenderColor::new(1.0, 1.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0)
         .pattern(RenderPattern::RepeatedGradation)
-        .pattern_scale(300.));
+        .pattern_scale(300.)
+        .pattern_angle_scale(0.2));
     materials.insert("floor".to_string(), floor_material.clone());
 
     let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),
