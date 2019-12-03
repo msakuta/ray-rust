@@ -3,6 +3,8 @@ use crate::vec3::Vec3;
 use vecmath;
 use std::collections::HashMap;
 use std::sync::Arc;
+use image::DynamicImage;
+use std::io;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -45,6 +47,21 @@ pub enum UVMap{
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderMaterialSerial{
+    name: String,
+    diffuse: RenderColor, /* Diffuse(R,G,B) */
+    specular: RenderColor,/* Specular(R,G,B) */
+    pn: i32,			/* Phong model index */
+    t: f32, /* transparency, unit length per decay */
+    n: f32, /* refraction constant */
+    glow_dist: f32,
+    frac: RenderColor, /* refraction per spectrum */
+    pattern: RenderPattern,
+    pattern_scale: f32,
+    pattern_angle_scale: f32,
+    texture_name: String,
+}
+
 pub struct RenderMaterial{
     name: String,
     diffuse: RenderColor, /* Diffuse(R,G,B) */
@@ -57,6 +74,8 @@ pub struct RenderMaterial{
     pattern: RenderPattern,
     pattern_scale: f32,
     pattern_angle_scale: f32,
+    texture_name: String,
+    texture: Option<DynamicImage>,
 }
 
 trait RenderMaterialInterface{
@@ -87,6 +106,8 @@ impl RenderMaterial{
              pattern: RenderPattern::Solid,
              pattern_scale: 1.,
              pattern_angle_scale: 1.,
+             texture_name: String::new(),
+             texture: None
          }
     }
 
@@ -120,6 +141,47 @@ impl RenderMaterial{
         self
     }
 
+    pub fn texture(mut self, texture_name: &str) -> Result<Self, io::Error>{
+        self.texture_name = String::from(texture_name);
+        self.texture = Some(image::open(texture_name).or(Err(io::Error::new(io::ErrorKind::Other, "texture image file load failed")))?);
+        Ok(self)
+    }
+
+    fn serialize(&self) -> RenderMaterialSerial{
+        RenderMaterialSerial{
+            name: self.name.clone(),
+            diffuse: self.diffuse.clone(),
+            specular: self.specular.clone(),
+            pn: self.pn,
+            t: self.t,
+            n: self.n,
+            glow_dist: self.glow_dist,
+            frac: self.frac.clone(),
+            pattern: self.pattern.clone(),
+            pattern_scale: self.pattern_scale,
+            pattern_angle_scale: self.pattern_angle_scale,
+            texture_name: self.texture_name.clone(),
+        }
+    }
+
+    fn deserialize(obj: &RenderMaterialSerial) -> Result<RenderMaterial, DeserializeError>{
+        Ok(RenderMaterial{
+            name: obj.name.clone(),
+            diffuse: obj.diffuse.clone(),
+            specular: obj.specular.clone(),
+            pn: obj.pn,
+            t: obj.t,
+            n: obj.n,
+            glow_dist: obj.glow_dist,
+            frac: obj.frac.clone(),
+            pattern: obj.pattern.clone(),
+            pattern_scale: obj.pattern_scale,
+            pattern_angle_scale: obj.pattern_angle_scale,
+            texture_name: obj.texture_name.clone(),
+            texture: image::open(&obj.texture_name).ok(),
+        })
+    }
+
     fn get_uv(&self, pos: &Vec3, uvmap: &UVMap) -> (f32, f32) {
         match uvmap {
             UVMap::XY => (pos.x / self.pattern_scale, pos.y / self.pattern_scale),
@@ -149,6 +211,18 @@ impl RenderMaterialInterface for RenderMaterial{
 
     fn lookup_texture(&self, uv: (f32, f32)) -> RenderColor{
         let (u, v) = uv;
+        fn fmod(f: f32, freq: f32) -> f32{
+            f - (f / freq).floor() * freq
+        }
+        fn imod(f: i32, freq: i32) -> i32{
+            f - (f as f32 / freq as f32).floor() as i32 * freq
+        }
+        if let Some(image::ImageRgb8(ref texture)) = self.texture {
+            let pixel = *texture.get_pixel(
+                imod((u * texture.width() as f32) as i32, texture.width() as i32) as u32,
+                imod((v * texture.height() as f32) as i32, texture.height() as i32) as u32);
+            return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+        }
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
@@ -161,9 +235,6 @@ impl RenderMaterialInterface for RenderMaterial{
                 })
             }
             RenderPattern::RepeatedGradation => {
-                fn fmod(f: f32, freq: f32) -> f32{
-                    f - (f / freq).floor() * freq
-                }
                 RenderColor::new(
                     self.diffuse.r * fmod(u, 1.),
                     self.diffuse.g * fmod(v, 1.),
@@ -462,7 +533,7 @@ pub struct RenderEnv{
 
 #[derive(Serialize, Deserialize)]
 struct Scene{
-    materials: HashMap<String, RenderMaterial>,
+    materials: HashMap<String, RenderMaterialSerial>,
     objects: Vec<RenderObjectSerial>,
 }
 
@@ -519,7 +590,7 @@ impl RenderEnv{
         };
         for object in &self.objects {
             let material = object.get_interface().get_material();
-            sceneobj.materials.insert(material.name.clone(), material.clone());
+            sceneobj.materials.insert(material.name.clone(), material.serialize());
         }
         Ok(serde_yaml::to_string(&sceneobj)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
@@ -528,7 +599,9 @@ impl RenderEnv{
 
     pub fn deserialize(&mut self, s: &str) -> Result<(), DeserializeError>{
         let sceneobj = serde_yaml::from_str::<Scene>(s)?;
-        self.materials = sceneobj.materials.into_iter().map(|m| (m.0, Arc::new(m.1))).collect();
+        let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
+            |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
+        self.materials = mm?;
         self.objects.clear();
         for object in sceneobj.objects {
             match object {
