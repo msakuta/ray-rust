@@ -44,6 +44,17 @@ pub enum UVMap{
     XY, YZ, ZX, LL,
 }
 
+impl UVMap{
+    fn get_uv(&self, pos: &Vec3) -> (f32, f32) {
+        match self {
+            UVMap::XY => (pos.x, pos.y),
+            UVMap::YZ => (pos.y, pos.z),
+            UVMap::ZX => (pos.z, pos.x),
+            _ => panic!("LL should not be given other than Sphere"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterial{
     name: String,
@@ -62,7 +73,7 @@ trait RenderMaterialInterface{
     fn get_phong_number(&self) -> i32;
     fn get_transparency(&self) -> f32;
     fn get_refraction_index(&self) -> f32;
-    fn lookup_texture(&self, pos: &Vec3, uvmap: &UVMap) -> RenderColor;
+    fn lookup_texture(&self, pos: &Vec3, uv: (f32, f32)) -> RenderColor;
 }
 
 impl RenderMaterial{
@@ -127,13 +138,8 @@ impl RenderMaterialInterface for RenderMaterial{
         self.n
     }
 
-    fn lookup_texture(&self, pos: &Vec3, uvmap: &UVMap) -> RenderColor{
-        let (u, v) = match uvmap {
-            UVMap::XY => (pos.x, pos.y),
-            UVMap::YZ => (pos.y, pos.z),
-            UVMap::ZX => (pos.z, pos.x),
-            UVMap::LL => (pos.x + pos.y, pos.y + pos.z),
-        };
+    fn lookup_texture(&self, pos: &Vec3, uv: (f32, f32)) -> RenderColor{
+        let (u, v) = uv;
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
@@ -267,7 +273,10 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(position, &self.uvmap)
+        self.material.lookup_texture(position, match &self.uvmap {
+            &UVMap::LL => ((position.x - self.org.x).atan2(position.z - self.org.z), position.y - self.org.y),
+            _ => self.uvmap.get_uv(position)
+        })
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -359,6 +368,9 @@ impl RenderFloor{
     }
 
     fn deserialize(ren: &RenderEnv, serial: &RenderFloorSerial) -> Result<RenderObject, DeserializeError>{
+        if let UVMap::LL = serial.uvmap {
+            return Err(DeserializeError::new(&format!("RenderFloor can't use LL mapping mode {}", serial.material)))
+        }
         Ok(RenderObject::Floor(Self::new_raw(ren.materials.get(&serial.material)
             .ok_or(DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
             .clone(),
@@ -373,7 +385,7 @@ impl RenderObjectInterface for RenderFloor{
     }
 
     fn get_diffuse(&self, pt: &Vec3) -> RenderColor{
-        self.material.lookup_texture(pt, &self.uvmap)
+        self.material.lookup_texture(pt, self.uvmap.get_uv(pt))
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
