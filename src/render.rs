@@ -359,10 +359,10 @@ pub enum RenderObject{
 }
 
 impl RenderObject{
-    pub fn get_interface(&self) -> &RenderObjectInterface{
+    pub fn get_interface(&self) -> &dyn RenderObjectInterface{
         match self {
-            RenderObject::Sphere(ref obj) => obj as &RenderObjectInterface,
-            RenderObject::Floor(ref obj) => obj as &RenderObjectInterface,
+            RenderObject::Sphere(ref obj) => obj as &dyn RenderObjectInterface,
+            RenderObject::Floor(ref obj) => obj as &dyn RenderObjectInterface,
         }
     }
 }
@@ -471,7 +471,7 @@ impl RenderEnv{
 }
 
 
-pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
+pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor),
     thread_count: i32) {
     use vecmath::{Matrix3x4, row_mat3x4_mul};
     let mx: Matrix3x4<f32> = [
@@ -499,7 +499,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut FnMut(i32, i32, &RenderColor),
 	view.x[1][3] = 0.;
 	view.x[2][3] = 30.;*/
 
-    let process_line = |iy: i32, point_middle: &mut FnMut(i32, i32, RenderColor)| {
+    let process_line = |iy: i32, point_middle: &mut dyn FnMut(i32, i32, RenderColor)| {
         for ix in 0..ren.xres {
             let mut vi = ren.cam.clone();
             let mut eye: Vec3 = Vec3::new( /* cast ray direction vector? */
