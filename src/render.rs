@@ -3,6 +3,10 @@ use crate::vec3::Vec3;
 use vecmath;
 use std::collections::HashMap;
 use std::sync::Arc;
+use image::DynamicImage;
+use std::io;
+use crate::modutil::*;
+use crate::pixelutil::*;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -44,7 +48,28 @@ pub enum UVMap{
     XY, YZ, ZX, LL,
 }
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum TextureFilter{
+    Nearest, Bilinear
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderMaterialSerial{
+    name: String,
+    diffuse: RenderColor, /* Diffuse(R,G,B) */
+    specular: RenderColor,/* Specular(R,G,B) */
+    pn: i32,			/* Phong model index */
+    t: f32, /* transparency, unit length per decay */
+    n: f32, /* refraction constant */
+    glow_dist: f32,
+    frac: RenderColor, /* refraction per spectrum */
+    pattern: RenderPattern,
+    pattern_scale: f32,
+    pattern_angle_scale: f32,
+    texture_name: String,
+    texture_filter: TextureFilter,
+}
+
 pub struct RenderMaterial{
     name: String,
     diffuse: RenderColor, /* Diffuse(R,G,B) */
@@ -57,6 +82,9 @@ pub struct RenderMaterial{
     pattern: RenderPattern,
     pattern_scale: f32,
     pattern_angle_scale: f32,
+    texture_name: String,
+    texture: Option<DynamicImage>,
+    texture_filter: TextureFilter,
 }
 
 trait RenderMaterialInterface{
@@ -87,6 +115,9 @@ impl RenderMaterial{
              pattern: RenderPattern::Solid,
              pattern_scale: 1.,
              pattern_angle_scale: 1.,
+             texture_name: String::new(),
+             texture: None,
+             texture_filter: TextureFilter::Nearest,
          }
     }
 
@@ -120,6 +151,49 @@ impl RenderMaterial{
         self
     }
 
+    pub fn texture(mut self, texture_name: &str) -> Result<Self, io::Error>{
+        self.texture_name = String::from(texture_name);
+        self.texture = Some(image::open(texture_name).or(Err(io::Error::new(io::ErrorKind::Other, "texture image file load failed")))?);
+        Ok(self)
+    }
+
+    fn serialize(&self) -> RenderMaterialSerial{
+        RenderMaterialSerial{
+            name: self.name.clone(),
+            diffuse: self.diffuse.clone(),
+            specular: self.specular.clone(),
+            pn: self.pn,
+            t: self.t,
+            n: self.n,
+            glow_dist: self.glow_dist,
+            frac: self.frac.clone(),
+            pattern: self.pattern.clone(),
+            pattern_scale: self.pattern_scale,
+            pattern_angle_scale: self.pattern_angle_scale,
+            texture_name: self.texture_name.clone(),
+            texture_filter: self.texture_filter,
+        }
+    }
+
+    fn deserialize(obj: &RenderMaterialSerial) -> Result<RenderMaterial, DeserializeError>{
+        Ok(RenderMaterial{
+            name: obj.name.clone(),
+            diffuse: obj.diffuse.clone(),
+            specular: obj.specular.clone(),
+            pn: obj.pn,
+            t: obj.t,
+            n: obj.n,
+            glow_dist: obj.glow_dist,
+            frac: obj.frac.clone(),
+            pattern: obj.pattern.clone(),
+            pattern_scale: obj.pattern_scale,
+            pattern_angle_scale: obj.pattern_angle_scale,
+            texture_name: obj.texture_name.clone(),
+            texture: image::open(&obj.texture_name).ok(),
+            texture_filter: obj.texture_filter,
+        })
+    }
+
     fn get_uv(&self, pos: &Vec3, uvmap: &UVMap) -> (f32, f32) {
         match uvmap {
             UVMap::XY => (pos.x / self.pattern_scale, pos.y / self.pattern_scale),
@@ -127,7 +201,7 @@ impl RenderMaterial{
             UVMap::ZX => (pos.z / self.pattern_scale, pos.x / self.pattern_scale),
             UVMap::LL => {
                 let (dx, dz) = (pos.x, pos.z);
-                (pos.x.atan2(pos.z) / self.pattern_angle_scale,
+                (pos.z.atan2(pos.x) / self.pattern_angle_scale,
                     ((dx * dx + dz * dz).sqrt().atan2(pos.y)) / self.pattern_angle_scale)
             },
         }
@@ -149,6 +223,28 @@ impl RenderMaterialInterface for RenderMaterial{
 
     fn lookup_texture(&self, uv: (f32, f32)) -> RenderColor{
         let (u, v) = uv;
+        if let Some(image::ImageRgb8(ref texture)) = self.texture {
+            match self.texture_filter {
+                TextureFilter::Nearest => {
+                    let pixel = *texture.get_pixel(
+                        imod((u * texture.width() as f32) as i32, texture.width() as i32) as u32,
+                        imod((v * texture.height() as f32) as i32, texture.height() as i32) as u32);
+                    return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+                },
+                TextureFilter::Bilinear => {
+                    let (fu, iu) = fimod(u * texture.width() as f32, texture.width() as f32);
+                    let (fv, iv) = fimod(v * texture.height() as f32, texture.height() as f32);
+                    let zero: PixelF = image::Rgb::<f32>([0f32; 3]);
+                    let pixel = [
+                        scale_pixel((1. - fu) * (1. - fv), texture.get_pixel(iu, iv)),
+                        scale_pixel((1. - fu) * fv, texture.get_pixel(iu, umod(iv + 1, texture.height()))),
+                        scale_pixel(fu * (1. - fv),  texture.get_pixel(umod(iu + 1, texture.width()), iv)),
+                        scale_pixel(fu * fv, texture.get_pixel(umod(iu + 1, texture.width()), umod(iv + 1, texture.height()))),
+                    ].iter().fold(zero, add_pixel);
+                    return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+                }
+            }
+        }
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),
             RenderPattern::Checkerboard => {
@@ -161,9 +257,6 @@ impl RenderMaterialInterface for RenderMaterial{
                 })
             }
             RenderPattern::RepeatedGradation => {
-                fn fmod(f: f32, freq: f32) -> f32{
-                    f - (f / freq).floor() * freq
-                }
                 RenderColor::new(
                     self.diffuse.r * fmod(u, 1.),
                     self.diffuse.g * fmod(v, 1.),
@@ -462,7 +555,7 @@ pub struct RenderEnv{
 
 #[derive(Serialize, Deserialize)]
 struct Scene{
-    materials: HashMap<String, RenderMaterial>,
+    materials: HashMap<String, RenderMaterialSerial>,
     objects: Vec<RenderObjectSerial>,
 }
 
@@ -519,7 +612,7 @@ impl RenderEnv{
         };
         for object in &self.objects {
             let material = object.get_interface().get_material();
-            sceneobj.materials.insert(material.name.clone(), material.clone());
+            sceneobj.materials.insert(material.name.clone(), material.serialize());
         }
         Ok(serde_yaml::to_string(&sceneobj)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
@@ -528,7 +621,9 @@ impl RenderEnv{
 
     pub fn deserialize(&mut self, s: &str) -> Result<(), DeserializeError>{
         let sceneobj = serde_yaml::from_str::<Scene>(s)?;
-        self.materials = sceneobj.materials.into_iter().map(|m| (m.0, Arc::new(m.1))).collect();
+        let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
+            |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
+        self.materials = mm?;
         self.objects.clear();
         for object in sceneobj.objects {
             match object {
