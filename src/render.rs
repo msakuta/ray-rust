@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use image::DynamicImage;
 use std::io;
+use crate::modutil::*;
+use crate::pixelutil::*;
 
 pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
@@ -46,6 +48,11 @@ pub enum UVMap{
     XY, YZ, ZX, LL,
 }
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum TextureFilter{
+    Nearest, Bilinear
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderMaterialSerial{
     name: String,
@@ -60,6 +67,7 @@ pub struct RenderMaterialSerial{
     pattern_scale: f32,
     pattern_angle_scale: f32,
     texture_name: String,
+    texture_filter: TextureFilter,
 }
 
 pub struct RenderMaterial{
@@ -76,6 +84,7 @@ pub struct RenderMaterial{
     pattern_angle_scale: f32,
     texture_name: String,
     texture: Option<DynamicImage>,
+    texture_filter: TextureFilter,
 }
 
 trait RenderMaterialInterface{
@@ -107,7 +116,8 @@ impl RenderMaterial{
              pattern_scale: 1.,
              pattern_angle_scale: 1.,
              texture_name: String::new(),
-             texture: None
+             texture: None,
+             texture_filter: TextureFilter::Nearest,
          }
     }
 
@@ -161,6 +171,7 @@ impl RenderMaterial{
             pattern_scale: self.pattern_scale,
             pattern_angle_scale: self.pattern_angle_scale,
             texture_name: self.texture_name.clone(),
+            texture_filter: self.texture_filter,
         }
     }
 
@@ -179,6 +190,7 @@ impl RenderMaterial{
             pattern_angle_scale: obj.pattern_angle_scale,
             texture_name: obj.texture_name.clone(),
             texture: image::open(&obj.texture_name).ok(),
+            texture_filter: obj.texture_filter,
         })
     }
 
@@ -211,17 +223,27 @@ impl RenderMaterialInterface for RenderMaterial{
 
     fn lookup_texture(&self, uv: (f32, f32)) -> RenderColor{
         let (u, v) = uv;
-        fn fmod(f: f32, freq: f32) -> f32{
-            f - (f / freq).floor() * freq
-        }
-        fn imod(f: i32, freq: i32) -> i32{
-            f - (f as f32 / freq as f32).floor() as i32 * freq
-        }
         if let Some(image::ImageRgb8(ref texture)) = self.texture {
-            let pixel = *texture.get_pixel(
-                imod((u * texture.width() as f32) as i32, texture.width() as i32) as u32,
-                imod((v * texture.height() as f32) as i32, texture.height() as i32) as u32);
-            return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+            match self.texture_filter {
+                TextureFilter::Nearest => {
+                    let pixel = *texture.get_pixel(
+                        imod((u * texture.width() as f32) as i32, texture.width() as i32) as u32,
+                        imod((v * texture.height() as f32) as i32, texture.height() as i32) as u32);
+                    return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+                },
+                TextureFilter::Bilinear => {
+                    let (fu, iu) = fimod(u * texture.width() as f32, texture.width() as f32);
+                    let (fv, iv) = fimod(v * texture.height() as f32, texture.height() as f32);
+                    let zero: PixelF = image::Rgb::<f32>([0f32; 3]);
+                    let pixel = [
+                        scale_pixel((1. - fu) * (1. - fv), texture.get_pixel(iu, iv)),
+                        scale_pixel((1. - fu) * fv, texture.get_pixel(iu, umod(iv + 1, texture.height()))),
+                        scale_pixel(fu * (1. - fv),  texture.get_pixel(umod(iu + 1, texture.width()), iv)),
+                        scale_pixel(fu * fv, texture.get_pixel(umod(iu + 1, texture.width()), umod(iv + 1, texture.height()))),
+                    ].iter().fold(zero, add_pixel);
+                    return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
+                }
+            }
         }
         match self.pattern {
             RenderPattern::Solid => self.diffuse.clone(),

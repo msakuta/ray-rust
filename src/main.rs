@@ -16,6 +16,8 @@ use image::ColorType;
 
 mod render;
 mod vec3;
+mod modutil;
+mod pixelutil;
 
 use render::{RenderColor,
     UVMap,
