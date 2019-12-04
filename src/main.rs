@@ -5,13 +5,11 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_yaml;
 
-use std::fs::File;
 use std::env;
 use std::time::Instant;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use image::png::PNGEncoder;
 use image::ColorType;
 
 mod render;
@@ -242,8 +240,5 @@ fn main() -> std::io::Result<()> {
     let end = start.elapsed();
     println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_nanos() / 1_000);
 
-    let buffer = File::create(output)?;
-    let encoder = PNGEncoder::new(buffer);
-
-    encoder.encode(&data, width as u32, height as u32, ColorType::RGB(8))
+    image::save_buffer(output, &data, width as u32, height as u32, ColorType::RGB(8))
 }
