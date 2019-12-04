@@ -189,7 +189,7 @@ impl RenderMaterial{
             UVMap::ZX => (pos.z / self.pattern_scale, pos.x / self.pattern_scale),
             UVMap::LL => {
                 let (dx, dz) = (pos.x, pos.z);
-                (pos.x.atan2(pos.z) / self.pattern_angle_scale,
+                (pos.z.atan2(pos.x) / self.pattern_angle_scale,
                     ((dx * dx + dz * dz).sqrt().atan2(pos.y)) / self.pattern_angle_scale)
             },
         }

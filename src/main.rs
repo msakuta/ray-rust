@@ -11,7 +11,6 @@ use std::time::Instant;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::io;
 use image::png::PNGEncoder;
 use image::ColorType;
 
