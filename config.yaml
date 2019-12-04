@@ -1,0 +1,130 @@
+---
+materials:
+  mirror:
+    name: mirror
+    diffuse:
+      r: 0.0
+      g: 0.0
+      b: 0.0
+    specular:
+      r: 1.0
+      g: 1.0
+      b: 1.0
+    pn: 24
+    t: 0.0
+    n: 0.0
+    glow_dist: 0.0
+    frac:
+      r: 1.0
+      g: 1.0
+      b: 1.0
+    pattern: Solid
+    pattern_scale: 1.0
+    pattern_angle_scale: 1.0
+  transparent:
+    name: transparent
+    diffuse:
+      r: 0.0
+      g: 0.0
+      b: 0.0
+    specular:
+      r: 0.0
+      g: 0.0
+      b: 0.0
+    pn: 0
+    t: 1.0
+    n: 1.5
+    glow_dist: 0.0
+    frac:
+      r: 1.4999799728393555
+      g: 1.4999899864196778
+      b: 1.5
+    pattern: Solid
+    pattern_scale: 1.0
+    pattern_angle_scale: 1.0
+  floor:
+    name: floor
+    diffuse:
+      r: 1.0
+      g: 1.0
+      b: 0.0
+    specular:
+      r: 0.0
+      g: 0.0
+      b: 0.0
+    pn: 0
+    t: 0.0
+    n: 0.0
+    glow_dist: 0.0
+    frac:
+      r: 1.0
+      g: 1.0
+      b: 1.0
+    pattern: RepeatedGradation
+    pattern_scale: 300.0
+    pattern_angle_scale: 0.20000000298023225
+  red:
+    name: red
+    diffuse:
+      r: 0.800000011920929
+      g: 0.5
+      b: 0.0
+    specular:
+      r: 0.0
+      g: 0.0
+      b: 0.0
+    pn: 24
+    t: 0.0
+    n: 0.0
+    glow_dist: 5.0
+    frac:
+      r: 1.0
+      g: 1.0
+      b: 1.0
+    pattern: Checkerboard
+    pattern_scale: 1.0
+    pattern_angle_scale: 0.2
+objects:
+  - Floor:
+      material: floor
+      org:
+        x: 0.0
+        y: -300.0
+        z: 0.0
+      face_normal:
+        x: 0.0
+        y: 1.0
+        z: 0.0
+      uvmap: ZX
+  - Sphere:
+      material: mirror
+      r: 80.0
+      org:
+        x: 0.0
+        y: -30.0
+        z: 172.0
+      uvmap: XY
+  - Sphere:
+      material: mirror
+      r: 80.0
+      org:
+        x: -200.0
+        y: -30.0
+        z: 172.0
+      uvmap: XY
+  - Sphere:
+      material: red
+      r: 80.0
+      org:
+        x: -200.0
+        y: -200.0
+        z: 172.0
+      uvmap: LL
+  - Sphere:
+      material: transparent
+      r: 100.0
+      org:
+        x: 70.0
+        y: -200.0
+        z: 150.0
+      uvmap: XY
