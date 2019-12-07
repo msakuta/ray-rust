@@ -5,19 +5,20 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_yaml;
 
-use std::fs::File;
 use std::env;
 use std::time::Instant;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use image::png::PNGEncoder;
 use image::ColorType;
 
 mod render;
 mod vec3;
+mod modutil;
+mod pixelutil;
 
 use render::{RenderColor,
+    UVMap,
     RenderMaterial, RenderPattern,
     RenderObject, RenderSphere, RenderFloor,
     RenderEnv, render};
@@ -130,7 +131,9 @@ fn main() -> std::io::Result<()> {
     let floor_material = Arc::new(RenderMaterial::new("floor".to_string(),
         RenderColor::new(1.0, 1.0, 0.0), RenderColor::new(0.0, 0.0, 0.0),  0, 0., 0.0)
         .pattern(RenderPattern::RepeatedGradation)
-        .pattern_scale(300.));
+        .pattern_scale(300.)
+        .pattern_angle_scale(0.2)
+        .texture("bar.png")?);
     materials.insert("floor".to_string(), floor_material.clone());
 
     let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),
@@ -147,7 +150,10 @@ fn main() -> std::io::Result<()> {
 
     let objects: Vec<RenderObject> = vec!{
     /* Plane */
-        RenderFloor::new (materials.get("floor").unwrap().clone(),       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.)),
+        RenderObject::Floor(
+            RenderFloor::new_raw(materials.get("floor").unwrap().clone(),       Vec3::new(  0.0, -300.0,  0.0),  Vec3::new(0., 1., 0.))
+            .uvmap(UVMap::ZX),
+        ),
         // RenderFloor::new (floor_material,       Vec3::new(-300.0,   0.0,  0.0),  Vec3::new(1., 0., 0.)),
     /* Spheres */
         RenderSphere::new(mirror_material.clone(), 80.0, Vec3::new(   0.0, -30.0,172.0)),
@@ -234,8 +240,5 @@ fn main() -> std::io::Result<()> {
     let end = start.elapsed();
     println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_nanos() / 1_000);
 
-    let buffer = File::create(output)?;
-    let encoder = PNGEncoder::new(buffer);
-
-    encoder.encode(&data, width as u32, height as u32, ColorType::RGB(8))
+    image::save_buffer(output, &data, width as u32, height as u32, ColorType::RGB(8))
 }
