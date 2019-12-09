@@ -551,10 +551,14 @@ pub struct RenderEnv{
     pub use_raymarching: bool,
     pub use_glow_effect: bool,
     glow_effect: f32,
+    pub max_reflections: i32,
+    pub max_refractions: i32,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Scene{
+    max_reflections: i32,
+    max_refractions: i32,
     materials: HashMap<String, RenderMaterialSerial>,
     objects: Vec<RenderObjectSerial>,
 }
@@ -586,6 +590,8 @@ impl RenderEnv{
             use_raymarching: false,
             use_glow_effect: false,
             glow_effect: 1.,
+            max_reflections: MAX_REFLECTIONS,
+            max_refractions: MAX_REFRACTIONS,
         }
     }
 
@@ -607,6 +613,8 @@ impl RenderEnv{
 
     pub fn serialize(&self) -> Result<String, std::io::Error>{
         let mut sceneobj = Scene{
+            max_reflections: MAX_REFLECTIONS,
+            max_refractions: MAX_REFRACTIONS,
             materials: HashMap::new(),
             objects: self.objects.iter().map(|o| o.get_interface().serialize()).collect(),
         };
@@ -623,6 +631,8 @@ impl RenderEnv{
         let sceneobj = serde_yaml::from_str::<Scene>(s)?;
         let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
             |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
+        self.max_reflections = sceneobj.max_reflections;
+        self.max_refractions = sceneobj.max_refractions;
         self.materials = mm?;
         self.objects.clear();
         for object in sceneobj.objects {
@@ -819,7 +829,7 @@ fn shading(ren: &RenderEnv,
 	// }
 
 	/* refraction! */
-	if nest < MAX_REFRACTIONS && 0. < o.get_material().get_transparency() {
+	if nest < ren.max_refractions && 0. < o.get_material().get_transparency() {
 		let sp = eye.dot(&n);
 		let f = o.get_material().get_transparency();
 
@@ -900,7 +910,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 				break;
             }
 
-			if lev >= MAX_REFLECTIONS {
+			if lev >= ren.max_reflections {
                 break;
             }
 
@@ -925,7 +935,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             ret_color.g	+= fc2.g * fcs.g;
             ret_color.b	+= fc2.b * fcs.b;
         }
-        if !(t < std::f32::INFINITY && lev < MAX_REFLECTIONS) {
+        if !(t < std::f32::INFINITY && lev < ren.max_reflections) {
             break;
         }
 	}
