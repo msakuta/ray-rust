@@ -151,10 +151,19 @@ impl RenderMaterial{
         self
     }
 
+    #[allow(dead_code)]
+    /// Error when open image failed
     pub fn texture(mut self, texture_name: &str) -> Result<Self, io::Error>{
         self.texture_name = String::from(texture_name);
         self.texture = Some(image::open(texture_name).or(Err(io::Error::new(io::ErrorKind::Other, "texture image file load failed")))?);
         Ok(self)
+    }
+
+    /// Ignore quietly when open image failed
+    pub fn texture_ok(mut self, texture_name: &str) -> Self{
+        self.texture_name = String::from(texture_name);
+        self.texture = image::open(texture_name).ok();
+        self
     }
 
     fn serialize(&self) -> RenderMaterialSerial{

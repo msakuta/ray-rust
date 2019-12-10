@@ -133,7 +133,7 @@ fn main() -> std::io::Result<()> {
         .pattern(RenderPattern::RepeatedGradation)
         .pattern_scale(300.)
         .pattern_angle_scale(0.2)
-        .texture("bar.png")?);
+        .texture_ok("bar.png"));
     materials.insert("floor".to_string(), floor_material.clone());
 
     let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),
