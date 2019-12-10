@@ -66,7 +66,9 @@ impl Mul<f32> for &Vec3{
     }
 }
 
-impl Add for &Vec3{
+// It doesn't matter much whether to use &Vec3 or Vec3 for arithmetic operators
+// because it derives Copy so that value semantics works without ownership transfer
+impl Add for Vec3{
     type Output = Vec3;
 
     fn add(self, o: Self) -> Vec3{
