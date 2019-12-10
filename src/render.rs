@@ -1,6 +1,6 @@
 
 use crate::vec3::Vec3;
-use vecmath;
+use crate::quat::Quat;
 use std::collections::HashMap;
 use std::sync::Arc;
 use image::DynamicImage;
@@ -542,9 +542,15 @@ impl RenderObject{
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
+struct CameraSerial{
+    position: Vec3,
+    pyr: Vec3,
+}
+
 struct Camera{
     position: Vec3,
     pyr: Vec3,
+    rotation: Quat,
 }
 
 pub struct RenderEnv{
@@ -571,7 +577,7 @@ pub struct RenderEnv{
 
 #[derive(Serialize, Deserialize)]
 struct Scene{
-    camera: Camera,
+    camera: CameraSerial,
     max_reflections: i32,
     max_refractions: i32,
     materials: HashMap<String, RenderMaterialSerial>,
@@ -595,6 +601,7 @@ impl RenderEnv{
             camera: Camera{
                 position: cam,
                 pyr,
+                rotation: Quat::from_pyr(&pyr),
             },
             xres,
             yres,
@@ -630,7 +637,10 @@ impl RenderEnv{
 
     pub fn serialize(&self) -> Result<String, std::io::Error>{
         let mut sceneobj = Scene{
-            camera: self.camera,
+            camera: CameraSerial{
+                position: self.camera.position,
+                pyr: self.camera.pyr
+            },
             max_reflections: MAX_REFLECTIONS,
             max_refractions: MAX_REFRACTIONS,
             materials: HashMap::new(),
@@ -649,7 +659,9 @@ impl RenderEnv{
         let sceneobj = serde_yaml::from_str::<Scene>(s)?;
         let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
             |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
-        self.camera = sceneobj.camera;
+        self.camera.position = sceneobj.camera.position;
+        self.camera.pyr = sceneobj.camera.pyr;
+        self.camera.rotation = Quat::from_pyr(&sceneobj.camera.pyr);
         self.max_reflections = sceneobj.max_reflections;
         self.max_refractions = sceneobj.max_refractions;
         self.materials = mm?;
@@ -669,32 +681,7 @@ impl RenderEnv{
 
 pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor),
     thread_count: i32) {
-    use vecmath::{Matrix3x4, row_mat3x4_mul};
-    let cam = &ren.camera;
-    let mx: Matrix3x4<f32> = [
-        [1., 0., 0., 0.],
-        [0., cam.pyr.z.cos(), -cam.pyr.z.sin(), 0.],
-        [0., cam.pyr.z.sin(), cam.pyr.z.cos(), 0.],
-    ];
 
-    let my = [
-        [cam.pyr.y.cos(), -cam.pyr.y.sin(), 0., 0.],
-        [cam.pyr.y.sin(), cam.pyr.y.cos(), 0., 0.],
-        [0., 0., 1., 0.]
-    ];
-
-    let mp = [
-        [cam.pyr.x.cos(), 0., cam.pyr.x.sin(), 0.],
-        [0., 1., 0., 0.],
-        [-cam.pyr.x.sin(), 0., cam.pyr.x.cos(), 0.],
-    ];
-
-    let view = row_mat3x4_mul(row_mat3x4_mul(mx, my), mp);
-
-    // println!("Projection: {:?}", view);
-/*	view.x[0][3] = 100.;
-	view.x[1][3] = 0.;
-	view.x[2][3] = 30.;*/
 
     let process_line = |iy: i32, point_middle: &mut dyn FnMut(i32, i32, RenderColor)| {
         for ix in 0..ren.xres {
@@ -704,8 +691,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
                 (ix - ren.xres / 2) as f32 * 2. * ren.xfov / ren.xres as f32,
                 -(iy - ren.yres / 2) as f32 * 2. * ren.yfov / ren.yres as f32,
             );
-            eye = Vec3::from(
-                vecmath::row_mat3x4_transform_vec3(view, eye.into())).normalized();
+            eye = ren.camera.rotation.transform(&eye).normalized();
 
             point_middle(ix, iy,
                 if ren.use_raymarching { raymarch } else

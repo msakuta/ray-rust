@@ -14,6 +14,7 @@ use image::ColorType;
 
 mod render;
 mod vec3;
+mod quat;
 mod modutil;
 mod pixelutil;
 
