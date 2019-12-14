@@ -384,7 +384,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(self.material.get_uv(&(position - &self.org), &self.uvmap))
+        self.material.lookup_texture(self.material.get_uv(&(*position - self.org), &self.uvmap))
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -392,13 +392,13 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_normal(&self, position: &Vec3) -> Vec3{
-        (position - &self.org).normalized()
+        (*position - self.org).normalized()
     }
 
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32{
         let obj = self;
         /* calculate vector from eye position to the object's center. */
-        let wpt = vi - &obj.org;
+        let wpt = *vi - obj.org;
 
         /* scalar product of the ray and the vector. */
         let b = 2.0f32 * eye.dot(&wpt);
@@ -423,7 +423,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn distance(&self, vi: &Vec3) -> f32{
-        ((&self.org - vi).len() - self.r).max(0.)
+        ((self.org - *vi).len() - self.r).max(0.)
     }
 
     fn serialize(&self) -> RenderObjectSerial{
@@ -550,6 +550,7 @@ struct CameraSerial{
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct CameraKeyframeSerial{
     camera: CameraSerial,
+    velocity: Vec3,
     duration: f32,
 }
 
@@ -575,6 +576,7 @@ impl From<CameraSerial> for Camera{
 
 pub struct CameraKeyframe{
     pub camera: Camera,
+    pub velocity: Vec3,
     pub duration: f32,
 }
 
@@ -691,10 +693,12 @@ impl RenderEnv{
         let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
             |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
         self.camera = Camera::from(sceneobj.camera);
-        self.camera_motion = CameraMotion(sceneobj.camera_motion.0.iter().map(|o| CameraKeyframe{
-            camera: Camera::from(o.camera),
-            duration: o.duration,
-        }).collect());
+        self.camera_motion = CameraMotion(sceneobj.camera_motion.0.iter().map(|o|
+            CameraKeyframe{
+                camera: Camera::from(o.camera),
+                velocity: o.velocity,
+                duration: o.duration,
+            }).collect());
         self.max_reflections = sceneobj.max_reflections;
         self.max_refractions = sceneobj.max_refractions;
         self.materials = mm?;
@@ -777,16 +781,41 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
     }
 }
 
+fn hermite_interpolate_f32(t: f32, x0: f32, x1: f32, v0: f32, v1: f32) -> f32{
+    let h = 1.;
+    let d = x0;
+    let c = v0;
+    let r = x1 - x0 - h * v0;
+    let s = v1 - v0;
+    let a = (h * s - 2. * r) / h / h / h;
+    let b = (-h * s + 3. * r) / h / h;
+    a * t * t * t + b * t * t + c * t + d
+}
+
+fn hermite_interpolate(t: f32, x0: &Vec3, x1: &Vec3, v0: &Vec3, v1: &Vec3) -> Vec3{
+    Vec3::new(
+        hermite_interpolate_f32(t, x0.x, x1.x, v0.x, v1.x),
+        hermite_interpolate_f32(t, x0.y, x1.y, v0.y, v1.y),
+        hermite_interpolate_f32(t, x0.z, x1.z, v0.z, v1.z))
+}
+
 pub fn render_frames(ren: &mut RenderEnv, width: usize, height: usize,
     frame_proc: &mut impl FnMut(i32, &Vec<u8>), thread_count: i32)
 {
     let mut prev_camera = ren.camera;
-    let mut total_frame = 0;
+    let mut prev_velocity = Vec3::zero();
+    let total_frames = ren.camera_motion.0.iter().fold(0., |acc, m| acc + m.duration);
+    let mut accum_frame = 0;
     let frame_step = 0.5;
-    for frame in ren.camera_motion.0.iter() {
+    for (n, frame) in ren.camera_motion.0.iter().enumerate() {
+        let v0 = prev_velocity;
+        let v1 = frame.velocity;
+        println!("keyframe {} / {}, v0: {},{},{}", n, ren.camera_motion.0.len(), v0.x, v0.y, v0.z);
         for i in 0..(frame.duration / frame_step) as i32 {
             let f = i as f32 / (frame.duration / frame_step);
-            ren.camera.position = &prev_camera.position * (1. - f) + &frame.camera.position * f;
+            println!("Rendering frame {} / {}, v0: {},{}", accum_frame, total_frames, v0.x, v0.y);
+            ren.camera.position = hermite_interpolate(f, &prev_camera.position, &frame.camera.position,
+                &v0, &v1);
             ren.camera.rotation = prev_camera.rotation.slerp(&frame.camera.rotation, f);
             let data = {
                 let mut data = vec![0u8; 3 * width * height];
@@ -799,11 +828,12 @@ pub fn render_frames(ren: &mut RenderEnv, width: usize, height: usize,
                 render(ren, &mut putpoint, thread_count);
                 data
             };
-            frame_proc(total_frame, &data);
-            println!("Rendered frame {}", i);
-            total_frame += 1;
+            frame_proc(accum_frame, &data);
+            accum_frame += 1;
+            // }
         }
         prev_camera = frame.camera;
+        prev_velocity = frame.velocity;
     }
 }
 
