@@ -551,6 +551,7 @@ struct CameraSerial{
 struct CameraKeyframeSerial{
     camera: CameraSerial,
     velocity: Vec3,
+    camera_target: Option<Vec3>,
     duration: f32,
 }
 
@@ -577,6 +578,7 @@ impl From<CameraSerial> for Camera{
 pub struct CameraKeyframe{
     pub camera: Camera,
     pub velocity: Vec3,
+    camera_target: Option<Vec3>,
     pub duration: f32,
 }
 
@@ -697,6 +699,7 @@ impl RenderEnv{
             CameraKeyframe{
                 camera: Camera::from(o.camera),
                 velocity: o.velocity,
+                camera_target: o.camera_target,
                 duration: o.duration,
             }).collect());
         self.max_reflections = sceneobj.max_reflections;
@@ -816,7 +819,17 @@ pub fn render_frames(ren: &mut RenderEnv, width: usize, height: usize,
             println!("Rendering frame {} / {}, v0: {},{}", accum_frame, total_frames, v0.x, v0.y);
             ren.camera.position = hermite_interpolate(f, &prev_camera.position, &frame.camera.position,
                 &v0, &v1);
-            ren.camera.rotation = prev_camera.rotation.slerp(&frame.camera.rotation, f);
+            ren.camera.rotation = if let Some(target) = frame.camera_target {
+                let delta = target - ren.camera.position;
+                let pitch = (delta.y).atan2((delta.x * delta.x + delta.z * delta.z).sqrt());
+                let yaw = -delta.z.atan2(delta.x);
+                Quat::rotation(yaw, 0., 1., 0.)
+                * Quat::rotation(pitch, 0., 0., 1.)
+                * Quat::rotation(-std::f32::consts::PI / 2., 1., 0., 0.)
+            }
+            else{
+                prev_camera.rotation.slerp(&frame.camera.rotation, f)
+            };
             let data = {
                 let mut data = vec![0u8; 3 * width * height];
                 let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
