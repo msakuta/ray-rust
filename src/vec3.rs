@@ -1,7 +1,6 @@
 
 
 use std::ops::{Add, AddAssign, Sub, Mul};
-use std::convert::Into;
 
 #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
 pub struct Vec3{
@@ -106,20 +105,6 @@ impl Sub for Vec3{
 
     fn sub(self, o: Self) -> Vec3{
         Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
-    }
-}
-
-// We cannot easily define Mat4 class with all the operator overloading,
-// so we give up and delegate to vecmath.
-impl Into<vecmath::Vector3<f32>> for Vec3{
-    fn into(self) -> vecmath::Vector3<f32> {
-        [self.x, self.y, self.z]
-    }
-}
-
-impl From<vecmath::Vector3<f32>> for Vec3{
-    fn from(v: vecmath::Vector3<f32>) -> Self {
-        Self::new(v[0], v[1], v[2])
     }
 }
 
