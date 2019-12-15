@@ -3,7 +3,7 @@ use std::ops::{Add, AddAssign, Sub, Mul};
 use std::convert::From;
 use crate::vec3::Vec3;
 
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
+#[derive(Clone, Debug, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Quat{
 	pub x: f32,
 	pub y: f32,
@@ -94,6 +94,41 @@ impl Quat{
     pub fn rotation(p: f32, sx: f32, sy: f32, sz: f32) -> Quat{
         let len = (p / 2.).sin();
         Quat::new(len * sx, len * sy, len * sz, (p / 2.).cos())
+    }
+
+    pub fn slerp(&self, o: &Self, t: f32) -> Self{
+        let qr = self.dot(o);
+        let ss = 1.0 - qr * qr;
+
+        fn sqrtepsilon() -> f32{
+            (1e-10f32).sqrt()
+        }
+
+        if ss <= sqrtepsilon() {
+            *self
+        }
+        else if self == o {
+            *self
+        }
+        else {
+            let sp = ss.sqrt();
+
+            let ph = qr.acos();
+            let pt = ph * t;
+            let mut t1 = pt.sin() / sp;
+            let t0 = (ph - pt).sin() / sp;
+
+            // Long path case
+            if qr < 0. {
+                t1 *= -1.;
+            }
+
+            Self::new(
+                self.x * t0 + o.x * t1,
+                self.y * t0 + o.y * t1,
+                self.z * t0 + o.z * t1,
+                self.w * t0 + o.w * t1)
+        }
     }
 
     pub fn from_pyr(pyr: &Vec3) -> Self{

@@ -384,7 +384,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(self.material.get_uv(&(position - &self.org), &self.uvmap))
+        self.material.lookup_texture(self.material.get_uv(&(*position - self.org), &self.uvmap))
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
@@ -392,13 +392,13 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_normal(&self, position: &Vec3) -> Vec3{
-        (position - &self.org).normalized()
+        (*position - self.org).normalized()
     }
 
     fn raycast(&self, vi: &Vec3, eye: &Vec3, ray_length: f32, flags: u32) -> f32{
         let obj = self;
         /* calculate vector from eye position to the object's center. */
-        let wpt = vi - &obj.org;
+        let wpt = *vi - obj.org;
 
         /* scalar product of the ray and the vector. */
         let b = 2.0f32 * eye.dot(&wpt);
@@ -423,7 +423,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn distance(&self, vi: &Vec3) -> f32{
-        ((&self.org - vi).len() - self.r).max(0.)
+        ((self.org - *vi).len() - self.r).max(0.)
     }
 
     fn serialize(&self) -> RenderObjectSerial{
@@ -547,14 +547,46 @@ struct CameraSerial{
     pyr: Vec3,
 }
 
-struct Camera{
+#[derive(Copy, Clone, Serialize, Deserialize)]
+struct CameraKeyframeSerial{
+    camera: CameraSerial,
+    velocity: Vec3,
+    camera_target: Option<Vec3>,
+    duration: f32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct CameraMotionSerial(Vec<CameraKeyframeSerial>);
+
+#[derive(Clone, Copy)]
+pub struct Camera{
     position: Vec3,
     pyr: Vec3,
     rotation: Quat,
 }
 
+impl From<CameraSerial> for Camera{
+    fn from(o: CameraSerial) -> Camera{
+        Camera{
+            position: o.position,
+            pyr: o.pyr,
+            rotation: Quat::from_pyr(&o.pyr),
+        }
+    }
+}
+
+pub struct CameraKeyframe{
+    pub camera: Camera,
+    pub velocity: Vec3,
+    camera_target: Option<Vec3>,
+    pub duration: f32,
+}
+
+pub struct CameraMotion(pub Vec<CameraKeyframe>);
+
 pub struct RenderEnv{
-    camera: Camera, /* camera position */
+    pub camera: Camera, /* camera position */
+    pub camera_motion: CameraMotion,
     pub xres: i32,
     pub yres: i32,
     pub xfov: f32,
@@ -578,6 +610,7 @@ pub struct RenderEnv{
 #[derive(Serialize, Deserialize)]
 struct Scene{
     camera: CameraSerial,
+    camera_motion: CameraMotionSerial,
     max_reflections: i32,
     max_refractions: i32,
     materials: HashMap<String, RenderMaterialSerial>,
@@ -603,6 +636,7 @@ impl RenderEnv{
                 pyr,
                 rotation: Quat::from_pyr(&pyr),
             },
+            camera_motion: CameraMotion(vec![]),
             xres,
             yres,
             xfov,
@@ -641,6 +675,7 @@ impl RenderEnv{
                 position: self.camera.position,
                 pyr: self.camera.pyr
             },
+            camera_motion: CameraMotionSerial(vec![]),
             max_reflections: MAX_REFLECTIONS,
             max_refractions: MAX_REFRACTIONS,
             materials: HashMap::new(),
@@ -659,9 +694,14 @@ impl RenderEnv{
         let sceneobj = serde_yaml::from_str::<Scene>(s)?;
         let mm: Result<HashMap<_, _>, DeserializeError> = sceneobj.materials.into_iter().map(
             |m| Ok((m.0, Arc::new(RenderMaterial::deserialize(&m.1)?)))).collect();
-        self.camera.position = sceneobj.camera.position;
-        self.camera.pyr = sceneobj.camera.pyr;
-        self.camera.rotation = Quat::from_pyr(&sceneobj.camera.pyr);
+        self.camera = Camera::from(sceneobj.camera);
+        self.camera_motion = CameraMotion(sceneobj.camera_motion.0.iter().map(|o|
+            CameraKeyframe{
+                camera: Camera::from(o.camera),
+                velocity: o.velocity,
+                camera_target: o.camera_target,
+                duration: o.duration,
+            }).collect());
         self.max_reflections = sceneobj.max_reflections;
         self.max_refractions = sceneobj.max_refractions;
         self.materials = mm?;
@@ -744,6 +784,71 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
     }
 }
 
+fn hermite_interpolate_f32(t: f32, x0: f32, x1: f32, v0: f32, v1: f32) -> f32{
+    let h = 1.;
+    let d = x0;
+    let c = v0;
+    let r = x1 - x0 - h * v0;
+    let s = v1 - v0;
+    let a = (h * s - 2. * r) / h / h / h;
+    let b = (-h * s + 3. * r) / h / h;
+    a * t * t * t + b * t * t + c * t + d
+}
+
+fn hermite_interpolate(t: f32, x0: &Vec3, x1: &Vec3, v0: &Vec3, v1: &Vec3) -> Vec3{
+    Vec3::new(
+        hermite_interpolate_f32(t, x0.x, x1.x, v0.x, v1.x),
+        hermite_interpolate_f32(t, x0.y, x1.y, v0.y, v1.y),
+        hermite_interpolate_f32(t, x0.z, x1.z, v0.z, v1.z))
+}
+
+pub fn render_frames(ren: &mut RenderEnv, width: usize, height: usize,
+    frame_proc: &mut impl FnMut(i32, &Vec<u8>), thread_count: i32)
+{
+    let mut prev_camera = ren.camera;
+    let mut prev_velocity = Vec3::zero();
+    let total_frames = ren.camera_motion.0.iter().fold(0., |acc, m| acc + m.duration);
+    let mut accum_frame = 0;
+    let frame_step = 0.5;
+    for (n, frame) in ren.camera_motion.0.iter().enumerate() {
+        let v0 = prev_velocity;
+        let v1 = frame.velocity;
+        println!("keyframe {} / {}, v0: {},{},{}", n, ren.camera_motion.0.len(), v0.x, v0.y, v0.z);
+        for i in 0..(frame.duration / frame_step) as i32 {
+            let f = i as f32 / (frame.duration / frame_step);
+            println!("Rendering frame {} / {}, v0: {},{}", accum_frame, total_frames, v0.x, v0.y);
+            ren.camera.position = hermite_interpolate(f, &prev_camera.position, &frame.camera.position,
+                &v0, &v1);
+            ren.camera.rotation = if let Some(target) = frame.camera_target {
+                let delta = target - ren.camera.position;
+                let pitch = (delta.y).atan2((delta.x * delta.x + delta.z * delta.z).sqrt());
+                let yaw = -delta.z.atan2(delta.x);
+                Quat::rotation(yaw, 0., 1., 0.)
+                * Quat::rotation(pitch, 0., 0., 1.)
+                * Quat::rotation(-std::f32::consts::PI / 2., 1., 0., 0.)
+            }
+            else{
+                prev_camera.rotation.slerp(&frame.camera.rotation, f)
+            };
+            let data = {
+                let mut data = vec![0u8; 3 * width * height];
+                let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
+                    data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
+                    data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
+                    data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
+                };
+
+                render(ren, &mut putpoint, thread_count);
+                data
+            };
+            frame_proc(accum_frame, &data);
+            accum_frame += 1;
+            // }
+        }
+        prev_camera = frame.camera;
+        prev_velocity = frame.velocity;
+    }
+}
 
 
 /* find first object the ray hits */
@@ -791,7 +896,7 @@ fn shading(ren: &RenderEnv,
         let pn = o.get_material().get_phong_number();
         (
             light_incidence.max(0.),
-            pt + &(&ren.light * eps),
+            *pt + (&ren.light * eps),
             if 0 != pn {
                 let reflection_incidence = -reflected_ray_to_light_source.dot(eye);
                 if reflection_incidence > 0.0 { reflection_incidence.powi(pn) }
@@ -842,9 +947,9 @@ fn shading(ren: &RenderEnv,
 		let fc2 = {
             let frac = o.get_material().get_refraction_index();
 			let reference = sp * (if sp > 0. { frac } else { 1. / frac } - 1.);
-            let mut ray = (eye + &(n * reference)).normalized();
+            let mut ray = (*eye + (n * reference)).normalized();
             let eps = std::f32::EPSILON;
-			let mut pt3 = pt + &(&ray * eps);
+			let mut pt3 = *pt + (&ray * eps);
             (if ren.use_raymarching { raymarch }
                 else { raytrace })(ren, &mut pt3, &mut ray, nest,
                 Some(&ren.objects[idx]), if sp < 0. { OUTONLY } else { INONLY })
@@ -894,7 +999,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 
             /* shared point */
             // What a terrible formula... it's almost impractical to use it everywhere.
-            let pt = &(&*eye * t) + vi;
+            let pt = (&*eye * t) + *vi;
 
             let o = &ren.objects[idx].get_interface();
             let n = o.get_normal(&pt);
@@ -1000,7 +1105,7 @@ fn raymarch_single(ren: &RenderEnv, init_pos: &Vec3, eye: &Vec3, ig: Option<&Ren
     let mut min_dist = std::f32::INFINITY;
     loop {
         let (dist, idx, glowing_dist) = distance_estimate(ren, &pos, ig);
-        pos = &(&*eye * dist) + &pos;
+        pos = (&*eye * dist) + pos;
         travel_dist += dist;
         iter += 1;
         // let glowing_dist = ren.objects[idx].get_interface().get_glowing_dist();

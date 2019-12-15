@@ -22,7 +22,8 @@ use render::{RenderColor,
     UVMap,
     RenderMaterial, RenderPattern,
     RenderObject, RenderSphere, RenderFloor,
-    RenderEnv, render};
+    RenderEnv,
+    render, render_frames};
 use vec3::Vec3;
 
 
@@ -236,10 +237,20 @@ fn main() -> std::io::Result<()> {
 
     let start = Instant::now();
 
-    render(&mut ren, &mut putpoint, thread_count);
+    let ret = if 0 < ren.camera_motion.0.len() {
+        render_frames(&mut ren, width, height, &mut |i, data| {
+            let frame_output = format!("{}{}.png", output, i);
+            image::save_buffer(frame_output, &data, width as u32, height as u32, ColorType::RGB(8)).ok();
+        }, thread_count);
+        Ok(())
+    }
+    else {
+        render(&mut ren, &mut putpoint, thread_count);
+
+        image::save_buffer(output, &data, width as u32, height as u32, ColorType::RGB(8))
+    };
 
     let end = start.elapsed();
     println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_nanos() / 1_000);
-
-    image::save_buffer(output, &data, width as u32, height as u32, ColorType::RGB(8))
+    ret
 }

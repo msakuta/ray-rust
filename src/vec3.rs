@@ -66,7 +66,18 @@ impl Mul<f32> for &Vec3{
     }
 }
 
-impl Add for &Vec3{
+impl Mul<f32> for Vec3{
+    type Output = Vec3;
+
+    fn mul(self, o: f32) -> Vec3{
+        Vec3::new(self.x * o, self.y * o, self.z * o)
+    }
+}
+
+
+// It doesn't matter much whether to use &Vec3 or Vec3 for arithmetic operators
+// because it derives Copy so that value semantics works without ownership transfer
+impl Add for Vec3{
     type Output = Vec3;
 
     fn add(self, o: Self) -> Vec3{
@@ -83,6 +94,14 @@ impl AddAssign for Vec3{
 }
 
 impl Sub for &Vec3{
+    type Output = Vec3;
+
+    fn sub(self, o: Self) -> Vec3{
+        Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
+    }
+}
+
+impl Sub for Vec3{
     type Output = Vec3;
 
     fn sub(self, o: Self) -> Vec3{
