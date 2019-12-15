@@ -187,7 +187,7 @@ fn main() -> std::io::Result<()> {
             }
             else {
                 let ret2 = if 0.995 < dot {
-                    let dd = (d - 0.995) * 150.;
+                    let dd = (dot - 0.995) * 150.;
                     RenderColor::new(ret.r + dd, ret.g + dd, ret.b + dd)
                 } else { ret };
                 let dot2 = dot - 0.9;
