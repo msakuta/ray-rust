@@ -749,19 +749,31 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
         }
     }
     else{
+        use std::sync::Mutex;
+        type WorkerResult = Result<(), mpsc::SendError<(i32, Vec<RenderColor>)>>;
         let scanlines = (ren.yres + thread_count - 1) / thread_count;
         println!("Splitting into {} scanlines; {} threads", scanlines, thread_count);
         crossbeam::scope(|scope| {
+            let counter = Arc::new(Mutex::new(0));
+            fn fetch_y(m_y: &Mutex<i32>) -> i32 {
+                let mut y = m_y.lock().unwrap();
+                let ret = *y;
+                *y += 1;
+                ret
+            }
             let (tx, rx) = mpsc::channel();
-            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, Result<(), mpsc::SendError<(i32, Vec<RenderColor>)>>>> = (0..thread_count).map(|iy| {
+            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, WorkerResult>> = (0..thread_count).map(|_| {
                 let tx1 = mpsc::Sender::clone(&tx);
-                scope.spawn(move |_| -> Result<(), mpsc::SendError<(i32, Vec<RenderColor>)>> {
-                    for iyy in 0..scanlines {
+                let m_y = counter.clone();
+                scope.spawn(move |_| -> WorkerResult {
+                    loop {
+                        let iyy = fetch_y(&m_y);
+                        if ren.yres <= iyy { break }
                         let mut linebuf = vec![RenderColor::zero(); ren.xres as usize];
-                        process_line(iy + iyy * thread_count, &mut |ix: i32, _iy: i32, col: RenderColor| {
+                        process_line(iyy, &mut |ix: i32, _iy: i32, col: RenderColor| {
                             linebuf[ix as usize] = col;
                         });
-                        tx1.send((iy + iyy * thread_count, linebuf))?;
+                        tx1.send((iyy, linebuf))?;
                     }
 
                     tx1.send((-1, vec![]))?;
