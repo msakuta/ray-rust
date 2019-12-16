@@ -749,25 +749,19 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
         }
     }
     else{
-        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicI32, Ordering};
         type WorkerResult = Result<(), mpsc::SendError<(i32, Vec<RenderColor>)>>;
         let scanlines = (ren.yres + thread_count - 1) / thread_count;
         println!("Splitting into {} scanlines; {} threads", scanlines, thread_count);
         crossbeam::scope(|scope| {
-            let counter = Arc::new(Mutex::new(0));
-            fn fetch_y(m_y: &Mutex<i32>) -> i32 {
-                let mut y = m_y.lock().unwrap();
-                let ret = *y;
-                *y += 1;
-                ret
-            }
+            let counter = Arc::new(AtomicI32::new(0));
             let (tx, rx) = mpsc::channel();
             let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, WorkerResult>> = (0..thread_count).map(|_| {
                 let tx1 = mpsc::Sender::clone(&tx);
                 let m_y = counter.clone();
                 scope.spawn(move |_| -> WorkerResult {
                     loop {
-                        let iyy = fetch_y(&m_y);
+                        let iyy = m_y.fetch_add(1, Ordering::SeqCst);
                         if ren.yres <= iyy { break }
                         let mut linebuf = vec![RenderColor::zero(); ren.xres as usize];
                         process_line(iyy, &mut |ix: i32, _iy: i32, col: RenderColor| {
