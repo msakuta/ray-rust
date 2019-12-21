@@ -26,7 +26,7 @@ use render::{RenderColor,
     RenderEnv,
     render, render_frames};
 use vec3::Vec3;
-use webserver::{run_webserver, RenderParams, RenderParamStruct};
+use webserver::{run_webserver, RenderParamStruct};
 
 
 fn main() -> std::io::Result<()> {

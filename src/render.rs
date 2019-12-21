@@ -564,9 +564,9 @@ struct CameraMotionSerial(Vec<CameraKeyframeSerial>);
 
 #[derive(Clone, Copy)]
 pub struct Camera{
-    position: Vec3,
-    pyr: Vec3,
-    rotation: Quat,
+    pub position: Vec3,
+    pub pyr: Vec3,
+    pub rotation: Quat,
 }
 
 impl From<CameraSerial> for Camera{
