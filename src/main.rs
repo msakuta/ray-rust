@@ -17,6 +17,7 @@ mod vec3;
 mod quat;
 mod modutil;
 mod pixelutil;
+mod webserver;
 
 use render::{RenderColor,
     UVMap,
@@ -25,6 +26,7 @@ use render::{RenderColor,
     RenderEnv,
     render, render_frames};
 use vec3::Vec3;
+use webserver::{run_webserver, RenderParams, RenderParamStruct};
 
 
 fn main() -> std::io::Result<()> {
@@ -34,8 +36,8 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file):
-        (usize, usize, String, i32, bool, bool, f32, String, String) = {
+    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file, webserver):
+        (usize, usize, String, i32, bool, bool, f32, String, String, bool) = {
         let mut width = 640;
         let mut width_set = false;
         let mut height = 480;
@@ -47,6 +49,7 @@ fn main() -> std::io::Result<()> {
         let mut thread_count = 8;
         let mut serialize_file = "".to_string();
         let mut deserialize_file = "".to_string();
+        let mut webserver = false;
         #[derive(PartialEq)]
         enum Next{Default, Output, ThreadCount, GlowEffect, SerializeFile, DeserializeFile}
         let mut next = Next::Default;
@@ -93,6 +96,9 @@ fn main() -> std::io::Result<()> {
                     else if arg == "-d" {
                         next = Next::DeserializeFile;
                     }
+                    else if arg == "-w" {
+                        webserver = true;
+                    }
                     else if !width_set {
                         width = arg.parse().expect("width must be an int");
                         width_set = true;
@@ -104,7 +110,7 @@ fn main() -> std::io::Result<()> {
                 }
             }
         }
-        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file)
+        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file, webserver)
     };
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -214,6 +220,15 @@ fn main() -> std::io::Result<()> {
     ).light(Vec3::new(50., 60., -50.))
     .use_raymarching(use_raymarching)
     .use_glow_effect(use_glow_effect, glow_effect);
+
+    if webserver {
+        return run_webserver(Arc::new(RenderParamStruct{
+            width,
+            height,
+            thread_count,
+            ren
+        }));
+    }
 
     if deserialize_file != "" {
         let mut file = std::fs::File::open(deserialize_file)?;

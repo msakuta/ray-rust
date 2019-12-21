@@ -331,6 +331,7 @@ pub trait RenderObjectInterface{
     fn serialize(&self) -> RenderObjectSerial;
 }
 
+#[derive(Clone)]
 pub struct RenderSphere{
     material: Arc<RenderMaterial>,
     r: f32,			/* Radius */
@@ -437,6 +438,7 @@ impl RenderObjectInterface for RenderSphere{
     }
 }
 
+#[derive(Clone)]
 pub struct RenderFloor{
     material: Arc<RenderMaterial>,
     org: Vec3,		/* Center */
@@ -528,6 +530,7 @@ impl RenderObjectInterface for RenderFloor{
     }
 }
 
+#[derive(Clone)]
 pub enum RenderObject{
     Sphere(RenderSphere),
     Floor(RenderFloor)
@@ -576,6 +579,7 @@ impl From<CameraSerial> for Camera{
     }
 }
 
+#[derive(Clone)]
 pub struct CameraKeyframe{
     pub camera: Camera,
     pub velocity: Vec3,
@@ -583,8 +587,10 @@ pub struct CameraKeyframe{
     pub duration: f32,
 }
 
+#[derive(Clone)]
 pub struct CameraMotion(pub Vec<CameraKeyframe>);
 
+#[derive(Clone)]
 pub struct RenderEnv{
     pub camera: Camera, /* camera position */
     pub camera_motion: CameraMotion,
