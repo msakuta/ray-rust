@@ -20,4 +20,5 @@ futures = { version = "0.3", features = ["compat"] }
 # Hyper is an asynchronous HTTP library. We'll use it to power our HTTP
 # server and to make HTTP requests.
 hyper = "0.13.1"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2", features = ["full", "rt-threaded"] }
+tower-service = "0.3.0"

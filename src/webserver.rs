@@ -4,26 +4,17 @@ use crate::render::{render, RenderEnv, RenderColor};
 use std::sync::Arc;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-use crate::Vec3;
 use crate::quat::Quat;
+use crate::hyper_adapt::{make_payload_service, payload_service};
+use std::thread;
 
 use {
     hyper::{
         // Miscellaneous types from Hyper for working with HTTP.
         Body, Request, Response, Server, StatusCode, Error,
-
-        // This function turns a closure which returns a future into an
-        // implementation of the the Hyper `Service` trait, which is an
-        // asynchronous function from a generic `Request` to a `Response`.
-        service::service_fn,
-        service::make_service_fn,
-
-        // A function which runs a future to completion using the Hyper runtime.
-        // rt::run,
     },
     std::net::SocketAddr,
 };
-use std::collections::HashMap;
 
 pub struct RenderParamStruct{
     pub width: usize,
@@ -34,8 +25,8 @@ pub struct RenderParamStruct{
 
 pub type RenderParams = Arc<RenderParamStruct>;
 
-fn render_web(ren: &RenderParamStruct) -> Vec<u8>{
-    let (width, height) = (ren.width, ren.height);
+fn render_web(renparam: &RenderParamStruct, ren: &RenderEnv) -> Vec<u8>{
+    let (width, height) = (renparam.width, renparam.height);
     let mut data = vec![0u8; 3 * width * height];
     
     for y in 0..height {
@@ -52,17 +43,17 @@ fn render_web(ren: &RenderParamStruct) -> Vec<u8>{
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
 
-    render(&ren.ren, &mut putpoint, ren.thread_count);
+    render(&ren, &mut putpoint, renparam.thread_count);
     data
 }
 
-const WIDTH: usize = 640;
-const HEIGHT: usize = 480;
-
-async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response<Body>, hyper::Error> {
+async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Response<Body>, hyper::Error> {
     // Always return successfully with a response containing a body with
     // a friendly greeting ;)
-    println!("Got request at {:?}", req.uri());
+    println!("Got request at {:?} in thread #{:?}", req.uri(), thread::current().id());
+
+    use std::f32::consts::PI;
+
     if req.uri() == "/" {
         Ok(Response::new(Body::from("<html>
         <head>
@@ -70,18 +61,25 @@ async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response
             <script>
             window.onload = function(){
                 var im = document.getElementById('render');
-                var x = -100;
-                var z = -100;
-                var yaw = -90;
-                function updatePos(){
-                    im.src = `/render?x=${x}&z=${z}&y=${yaw}`;
+                ".to_string()
+                + &format!("
+                var x = {};
+                var y = {};
+                var z = {};
+                var yaw = {};\n",
+                renparam.ren.camera.position.x,
+                renparam.ren.camera.position.y,
+                renparam.ren.camera.position.z,
+                renparam.ren.camera.pyr.y * 180. / PI)
+                + "function updatePos(){
+                    im.src = `/render?x=${x}&y=${y}&z=${z}&Y=${yaw}`;
                 }
                 im.onclick = function(){
                     z += 10;
                     updatePos();
                 }
                 updatePos();
-                window.onkeydown = function(e){
+                window.onkeydown = function(event){
                     if(event.key === 'a'){
                         x += 10 * Math.sin(yaw * Math.PI / 180);
                         z += 10 * Math.cos(yaw * Math.PI / 180);
@@ -100,6 +98,14 @@ async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response
                     else if(event.key === 's'){
                         x -= 10 * Math.cos(yaw * Math.PI / 180);
                         z += 10 * Math.sin(yaw * Math.PI / 180);
+                        updatePos();
+                    }
+                    else if(event.key === 'q'){
+                        y += 10;
+                        updatePos();
+                    }
+                    else if(event.key === 'z'){
+                        y -= 10;
                         updatePos();
                     }
                     else if(event.key === 'ArrowRight'){
@@ -137,8 +143,8 @@ async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response
     }
     else if req.uri().path() == "/render" {
         println!("GET /render, query = {:?}", req.uri().query());
-        let (xpos, zpos, yaw) = if let Some(query) = req.uri().query() {
-            let (mut xpos, mut zpos, mut yaw) = (0f32, 0f32, 0f32);
+        let (xpos, ypos, zpos, yaw) = if let Some(query) = req.uri().query() {
+            let [mut xpos, mut ypos, mut zpos, mut yaw] = [0f32; 4];
             for s in query.split("&") {
                 match &s[..2] {
                     "x=" => if let Ok(f) = s[2..].parse::<f32>() {
@@ -148,84 +154,31 @@ async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response
                         zpos = f;
                     }
                     "y=" => if let Ok(f) = s[2..].parse::<f32>() {
+                        ypos = f;
+                    }
+                    "Y=" => if let Ok(f) = s[2..].parse::<f32>() {
                         yaw = f;
                     }
                     _ => ()
                 }
             }
-            (xpos, zpos, yaw)
+            (xpos, ypos, zpos, yaw)
         }
         else {
-            (0., 0., 0.)
+            (0., 0., 0., 0.)
         };
-        println!("Rendering with xpos={}", xpos);
-        let deserialize_file = "out2.yaml";
-        let mut file = tokio::fs::File::open(deserialize_file).await.unwrap();
-        let mut buf = String::new();
-        file.read_to_string(&mut buf).await.unwrap();
+        println!("Rendering with xpos={}, ypos={}, zpos={}, yaw={}", xpos, ypos, zpos, yaw);
 
-        use std::f32::consts::PI;
-
-        fn bgcolor(ren: &RenderEnv, direction: &Vec3) -> RenderColor{
-            let phi = direction.z.atan2(direction.x);
-            let the = direction.y.asin();
-            let d = (50. * PI + phi * 10. * PI) % (2. * PI) - PI;
-            let dd = (50. * PI + the * 10. * PI) % (2. * PI) - PI;
-            let ret = RenderColor::new(
-                0.5 / (15. * (d * d * dd * dd) + 1.),
-                0.25 - direction.y / 4.,
-                0.25 - direction.y / 4.,
-            );
-            let dot = ren.light.dot(direction);
-    
-            if dot > 0.9 {
-                if 0.9995 < dot {
-                    RenderColor::new(2., 2., 2.)
-                }
-                else {
-                    let ret2 = if 0.995 < dot {
-                        let dd = (dot - 0.995) * 150.;
-                        RenderColor::new(ret.r + dd, ret.g + dd, ret.b + dd)
-                    } else { ret };
-                    let dot2 = dot - 0.9;
-                    RenderColor::new(ret2.r + dot2 * 5., ret2.g + dot2 * 5., ret2.b)
-                }
-            }
-            else {
-                ret
-            }
-            // else PointMandel(dir->x * 2., dir->z * 2., 32, ret);
-        }
-
-        let xmax: usize = WIDTH;
-        let ymax: usize = HEIGHT;
-        let xfov: f32 = 1.;
-        let yfov: f32 = ymax as f32 / xmax as f32;
-    
-        let mut renparam = RenderParamStruct{
-            width: WIDTH,
-            height: HEIGHT,
-            thread_count: 8,
-            ren: RenderEnv::new(
-                Vec3::new(0., -150., -300.), /* cam */
-                Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */
-                xmax as i32,
-                ymax as i32,
-                xfov,
-                yfov,
-                HashMap::new(),
-                vec![],
-                bgcolor,
-            ).light(Vec3::new(50., 60., -50.))
-        };
-        renparam.ren.deserialize(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,
-            "Deserialize error: ".to_string() + &e.s)).unwrap();
-        renparam.ren.camera.position.x = xpos;
-        renparam.ren.camera.position.z = zpos;
-        renparam.ren.camera.pyr.y = yaw * PI / 180.;
-        renparam.ren.camera.rotation = Quat::from_pyr(&renparam.ren.camera.pyr);
+        // Cloning a whole RenderEnv object is dumb, but probably faster than deserializing from
+        // a file in every request, and we need to modify camera position.
+        let mut ren = renparam.ren.clone();
+        ren.camera.position.x = xpos;
+        ren.camera.position.y = ypos;
+        ren.camera.position.z = zpos;
+        ren.camera.pyr.y = yaw * PI / 180.;
+        ren.camera.rotation = Quat::from_pyr(&ren.camera.pyr);
         let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
-            renparam.width as u32, renparam.height as u32, render_web(&renparam)).unwrap());
+            renparam.width as u32, renparam.height as u32, render_web(&renparam, &ren)).unwrap());
         let mut buf: Vec<u8> = vec![];
         if let Ok(_) = imbuf.write_to(&mut buf, image::ImageOutputFormat::PNG) {
             // let enc = image::png::PNGEncoder::new();
@@ -248,15 +201,8 @@ async fn serve_req(req: Request<Body>/*, ren: RenderParams*/) -> Result<Response
     }
 }
 
-async fn run_server(addr: SocketAddr) {
+async fn run_server(addr: SocketAddr, ren: RenderParams) {
     println!("Listening on http://{}", addr);
-
-    // A `Service` is needed for every connection, so this
-    // creates one from our `hello_world` function.
-    // let make_svc = make_service_fn(|_conn| async {
-    //     // service_fn converts our function into a `Service`
-    //     Ok::<_, Infallible>(service_fn(hello_world))
-    // });
 
     // Create a server bound on the provided address
     let serve_future = Server::bind(&addr)
@@ -269,9 +215,9 @@ async fn run_server(addr: SocketAddr) {
         // wrapper to go from a futures 0.3 future (the kind returned by
         // `async fn`) to a futures 0.1 future (the kind used by Hyper).
         // .serve(|| service_fn(|req| serve_req(req, ren.clone()).boxed().compat()));
-        .serve(make_service_fn(|_| async {
-            Ok::<_, Error>(service_fn(|req| serve_req(req)))
-        }));
+        .serve(make_payload_service(|_, ren| async move {
+            Ok::<_, Error>(payload_service(|req, ren| serve_req(req, ren), ren))
+        }, ren));
 
     // Wait for the server to complete serving or exit with an error.
     // If an error occurred, print it to stderr.
@@ -280,36 +226,16 @@ async fn run_server(addr: SocketAddr) {
     }
 }
 
-// static s_arc: RenderParams = RenderParams::new(
-//     RenderParamStruct{
-//         width: 1200,
-//         height: 200,
-//         ren: RenderEnv::new(
-//             Vec3::new(0., -150., -300.), /* cam */
-//             Vec3::new(0., -PI / 2., -PI / 2.), /* pyr */
-//             1200,
-//             200, /* xres, yres */
-//             1.,
-//             1., /* xfov, yfov*/
-//             HashMap::new(),
-//             vec![],
-//             RenderColor::new(1.,1.,1.,1.), /* bgproc */
-//         ).light(Vec3::new(50., 60., -50.))
-//         .use_raymarching(use_raymarching)
-//         .use_glow_effect(use_glow_effect, glow_effect),
-//     }
-// );
-
-pub fn run_webserver(_ren: RenderParams) -> std::io::Result<()>{
+pub fn run_webserver(ren: RenderParams) -> std::io::Result<()>{
     // Set the address to run our socket on.
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
 
     // Call our `run_server` function, which returns a future.
     // As with every `async fn`, for `run_server` to do anything,
     // the returned future needs to be run. Additionally,
     // we need to convert the returned future from a futures 0.3 future into a
     // futures 0.1 future.
-    let futures_03_future = run_server(addr);
+    let futures_03_future = run_server(addr, ren);
         // |req: Request<Body>| async {
         //     // let ren_clone = ren.clone();
         //     serve_req(req/*, ren_clone*/).await

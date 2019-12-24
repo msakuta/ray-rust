@@ -18,6 +18,7 @@ mod quat;
 mod modutil;
 mod pixelutil;
 mod webserver;
+mod hyper_adapt;
 
 use render::{RenderColor,
     UVMap,
@@ -221,15 +222,6 @@ fn main() -> std::io::Result<()> {
     .use_raymarching(use_raymarching)
     .use_glow_effect(use_glow_effect, glow_effect);
 
-    if webserver {
-        return run_webserver(Arc::new(RenderParamStruct{
-            width,
-            height,
-            thread_count,
-            ren
-        }));
-    }
-
     if deserialize_file != "" {
         let mut file = std::fs::File::open(deserialize_file)?;
         let mut buf = String::new();
@@ -243,6 +235,15 @@ fn main() -> std::io::Result<()> {
         // for (i, object) in ren.objects.iter().enumerate() {
         //     println!("  [{}]: {}", i, object.get_interface().get_material().get_name());
         // }
+    }
+
+    if webserver {
+        return run_webserver(Arc::new(RenderParamStruct{
+            width,
+            height,
+            thread_count,
+            ren
+        }));
     }
 
     if serialize_file != "" {
