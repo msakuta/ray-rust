@@ -61,6 +61,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
             <script>
             window.onload = function(){
                 var im = document.getElementById('render');
+                var label = document.getElementById('label');
                 ".to_string()
                 + &format!("
                 var x = {};
@@ -73,6 +74,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                 renparam.ren.camera.pyr.y * 180. / PI)
                 + "function updatePos(){
                     im.src = `/render?x=${x}&y=${y}&z=${z}&Y=${yaw}`;
+                    label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}`;
                 }
                 im.onclick = function(){
                     z += 10;
@@ -121,8 +123,9 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
             </script>
         </head>
         <body>
-            <h1>hello, world!</h1>
+            <h1>ray-rust web interface</h1>
             <img id='render'>
+            <div id='label'></div>
         </body>")))
     }
     else if req.uri() == "/image" {
