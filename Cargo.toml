@@ -11,11 +11,7 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
 
-# The latest version of the "futures" library, which has lots of utilities
-# for writing async code. Enable the "compat" feature to include the
-# functions for using futures 0.3 and async/await with the Hyper library,
-# which use futures 0.1.
-futures = { version = "0.3", features = ["compat"] }
+futures = { version = "0.3" }
 
 # Hyper is an asynchronous HTTP library. We'll use it to power our HTTP
 # server and to make HTTP requests.
