@@ -67,14 +67,16 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                 var x = {};
                 var y = {};
                 var z = {};
-                var yaw = {};\n",
+                var yaw = {};
+                var pitch = {};\n",
                 renparam.ren.camera.position.x,
                 renparam.ren.camera.position.y,
                 renparam.ren.camera.position.z,
-                renparam.ren.camera.pyr.y * 180. / PI)
+                renparam.ren.camera.pyr.y * 180. / PI,
+                renparam.ren.camera.pyr.x * 180. / PI)
                 + "function updatePos(){
-                    im.src = `/render?x=${x}&y=${y}&z=${z}&Y=${yaw}`;
-                    label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}`;
+                    im.src = `/render?x=${x}&y=${y}&z=${z}&yaw=${yaw}&pitch=${pitch}`;
+                    label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}<br>pitch=${pitch}`;
                 }
                 im.onclick = function(){
                     z += 10;
@@ -86,45 +88,82 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                         x += 10 * Math.sin(yaw * Math.PI / 180);
                         z += 10 * Math.cos(yaw * Math.PI / 180);
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'd'){
                         x -= 10 * Math.sin(yaw * Math.PI / 180);
                         z -= 10 * Math.cos(yaw * Math.PI / 180);
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'w'){
                         x += 10 * Math.cos(yaw * Math.PI / 180);
                         z -= 10 * Math.sin(yaw * Math.PI / 180);
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 's'){
                         x -= 10 * Math.cos(yaw * Math.PI / 180);
                         z += 10 * Math.sin(yaw * Math.PI / 180);
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'q'){
                         y += 10;
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'z'){
                         y -= 10;
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'ArrowRight'){
-                        yaw += 10;
+                        yaw += 5;
                         updatePos();
+                        event.preventDefault();
                     }
                     else if(event.key === 'ArrowLeft'){
-                        yaw -= 10;
+                        yaw -= 5;
                         updatePos();
+                        event.preventDefault();
+                    }
+                    else if(event.key === 'ArrowUp'){
+                        pitch -= 5;
+                        updatePos();
+                        event.preventDefault();
+                    }
+                    else if(event.key === 'ArrowDown'){
+                        pitch += 5;
+                        updatePos();
+                        event.preventDefault();
                     }
                 }
             }
             </script>
+            <style>
+                table { border-collapse: collapse; border: solid; }
+            </style>
         </head>
         <body>
             <h1>ray-rust web interface</h1>
             <img id='render'>
+            <hr>
+            <h2>Controls</h2>
+            <table border='1'>
+            <tr><td>W</td><td>forward</td></tr>
+            <tr><td>S</td><td>backward</td></tr>
+            <tr><td>A</td><td>left</td></tr>
+            <tr><td>D</td><td>right</td></tr>
+            <tr><td>Q</td><td>up</td></tr>
+            <tr><td>Z</td><td>down</td></tr>
+            <tr><td>Left arrow</td><td>Turn left</td></tr>
+            <tr><td>Right arrow</td><td>Turn right</td></tr>
+            <tr><td>Up arrow</td><td>Turn up</td></tr>
+            <tr><td>Down arrow</td><td>Turn down</td></tr>
+            </table>
+            <hr>
+            <h2>Debug</h2>
             <div id='label'></div>
         </body>")))
     }
@@ -146,31 +185,40 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
     }
     else if req.uri().path() == "/render" {
         println!("GET /render, query = {:?}", req.uri().query());
-        let (xpos, ypos, zpos, yaw) = if let Some(query) = req.uri().query() {
-            let [mut xpos, mut ypos, mut zpos, mut yaw] = [0f32; 4];
+        let (xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
+            let [mut xpos, mut ypos, mut zpos, mut yaw, mut pitch] = [0f32; 5];
             for s in query.split("&") {
-                match &s[..2] {
-                    "x=" => if let Ok(f) = s[2..].parse::<f32>() {
+                let mut it = s.split("=");
+                let tokens = match [it.next(), it.next()] {
+                    [Some(a), Some(b)] => [a, b],
+                    _ => continue,
+                };
+                match tokens {
+                    ["x", x] => if let Ok(f) = x.parse::<f32>() {
                         xpos = f;
                     }
-                    "z=" => if let Ok(f) = s[2..].parse::<f32>() {
+                    ["z", z] => if let Ok(f) = z.parse::<f32>() {
                         zpos = f;
                     }
-                    "y=" => if let Ok(f) = s[2..].parse::<f32>() {
+                    ["y", y] => if let Ok(f) = y.parse::<f32>() {
                         ypos = f;
                     }
-                    "Y=" => if let Ok(f) = s[2..].parse::<f32>() {
+                    ["yaw", ss] => if let Ok(f) = ss.parse::<f32>() {
                         yaw = f;
+                    }
+                    ["pitch", ss] => if let Ok(f) = ss.parse::<f32>() {
+                        pitch = f;
                     }
                     _ => ()
                 }
             }
-            (xpos, ypos, zpos, yaw)
+            (xpos, ypos, zpos, yaw, pitch)
         }
         else {
-            (0., 0., 0., 0.)
+            (0., 0., 0., 0., 0.)
         };
-        println!("Rendering with xpos={}, ypos={}, zpos={}, yaw={}", xpos, ypos, zpos, yaw);
+        println!("Rendering with xpos={}, ypos={}, zpos={}, yaw={} pitch={}",
+            xpos, ypos, zpos, yaw, pitch);
 
         // Cloning a whole RenderEnv object is dumb, but probably faster than deserializing from
         // a file in every request, and we need to modify camera position.
@@ -179,6 +227,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
         ren.camera.position.y = ypos;
         ren.camera.position.z = zpos;
         ren.camera.pyr.y = yaw * PI / 180.;
+        ren.camera.pyr.x = pitch * PI / 180.;
         ren.camera.rotation = Quat::from_pyr(&ren.camera.pyr);
         let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
             renparam.width as u32, renparam.height as u32, render_web(&renparam, &ren)).unwrap());
