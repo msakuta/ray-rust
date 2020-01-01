@@ -10,3 +10,11 @@ crossbeam = "0.7.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
+
+futures = { version = "0.3" }
+
+# Hyper is an asynchronous HTTP library. We'll use it to power our HTTP
+# server and to make HTTP requests.
+hyper = "0.13.1"
+tokio = { version = "0.2", features = ["full", "rt-threaded"] }
+tower-service = "0.3.0"
