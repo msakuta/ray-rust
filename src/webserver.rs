@@ -188,12 +188,8 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
         let (xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
             let [mut xpos, mut ypos, mut zpos, mut yaw, mut pitch] = [0f32; 5];
             for s in query.split("&") {
-                let mut it = s.split("=");
-                let tokens = match [it.next(), it.next()] {
-                    [Some(a), Some(b)] => [a, b],
-                    _ => continue,
-                };
-                match tokens {
+                let tokens: Vec<_> = s.split("=").collect();
+                match tokens[..] {
                     ["x", x] => if let Ok(f) = x.parse::<f32>() {
                         xpos = f;
                     }
