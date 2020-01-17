@@ -74,68 +74,107 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                 renparam.ren.camera.position.z,
                 renparam.ren.camera.pyr.y * 180. / PI,
                 renparam.ren.camera.pyr.x * 180. / PI)
-                + "function updatePos(){
-                    im.src = `/render?x=${x}&y=${y}&z=${z}&yaw=${yaw}&pitch=${pitch}`;
+                + "
+                var buttonStates = {
+                    w: false,
+                    s: false,
+                    a: false,
+                    d: false,
+                    q: false,
+                    z: false,
+                    ArrowRight: false,
+                    ArrowLeft: false,
+                    ArrowUp: false,
+                    ArrowDown: false,
+                };
+                function updatePos(){
+                    fetch(`/render?x=${x}&y=${y}&z=${z}&yaw=${yaw}&pitch=${pitch}`)
+                        .then(function(response) {
+                            if(response.ok) {
+                                return response.blob();
+                            }
+                        })
+                        .then(function(myBlob) { 
+                            var objectURL = URL.createObjectURL(myBlob); 
+                            im.src = objectURL;
+                            tryUpdate();
+                        }).catch(function(error) {
+                            console.log('There has been a problem with your fetch operation: ', error.message);
+                        });
                     label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}<br>pitch=${pitch}`;
                 }
-                im.onclick = function(){
-                    z += 10;
-                    updatePos();
-                }
-                updatePos();
-                window.onkeydown = function(event){
-                    if(event.key === 'a'){
+                function tryUpdate(){
+                    if(buttonStates.a){
                         x += 10 * Math.sin(yaw * Math.PI / 180);
                         z += 10 * Math.cos(yaw * Math.PI / 180);
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'd'){
+                    if(buttonStates.d){
                         x -= 10 * Math.sin(yaw * Math.PI / 180);
                         z -= 10 * Math.cos(yaw * Math.PI / 180);
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'w'){
+                    if(buttonStates.w){
                         x += 10 * Math.cos(yaw * Math.PI / 180);
                         z -= 10 * Math.sin(yaw * Math.PI / 180);
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 's'){
+                    if(buttonStates.s){
                         x -= 10 * Math.cos(yaw * Math.PI / 180);
                         z += 10 * Math.sin(yaw * Math.PI / 180);
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'q'){
+                    if(buttonStates.q){
                         y += 10;
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'z'){
+                    if(buttonStates.z){
                         y -= 10;
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'ArrowRight'){
+                    if(buttonStates.ArrowRight){
                         yaw += 5;
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'ArrowLeft'){
+                    if(buttonStates.ArrowLeft){
                         yaw -= 5;
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'ArrowUp'){
+                    if(buttonStates.ArrowUp){
                         pitch -= 5;
                         updatePos();
-                        event.preventDefault();
+                        return true;
                     }
-                    else if(event.key === 'ArrowDown'){
+                    if(buttonStates.ArrowDown){
                         pitch += 5;
                         updatePos();
+                        return true;
+                    }
+                    return false;
+                }
+                updatePos();
+                window.onkeydown = function(event){
+                    if(event.key in buttonStates){
+                        if(!buttonStates[event.key]){
+                            console.log(`onkeydown x: ${x}, y: ${y}`)
+                            buttonStates[event.key] = true;
+                            if(tryUpdate()){
+                                event.preventDefault();
+                            }
+                        }
+                    }
+                }
+                window.onkeyup = function(event){
+                    if(event.key in buttonStates){
+                        buttonStates[event.key] = false;
                         event.preventDefault();
                     }
                 }
