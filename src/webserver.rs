@@ -273,6 +273,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("Cache-Control", "no-cache")
+                .header("Content-Type", "image/png")
                 .body(Body::from(buf))
                 .unwrap())
         }
