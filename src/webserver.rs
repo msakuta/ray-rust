@@ -104,57 +104,52 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                     label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}<br>pitch=${pitch}`;
                 }
                 function tryUpdate(){
+                    var ok = false;
                     if(buttonStates.a){
                         x += 10 * Math.sin(yaw * Math.PI / 180);
                         z += 10 * Math.cos(yaw * Math.PI / 180);
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.d){
                         x -= 10 * Math.sin(yaw * Math.PI / 180);
                         z -= 10 * Math.cos(yaw * Math.PI / 180);
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.w){
                         x += 10 * Math.cos(yaw * Math.PI / 180);
                         z -= 10 * Math.sin(yaw * Math.PI / 180);
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.s){
                         x -= 10 * Math.cos(yaw * Math.PI / 180);
                         z += 10 * Math.sin(yaw * Math.PI / 180);
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.q){
                         y += 10;
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.z){
                         y -= 10;
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.ArrowRight){
                         yaw += 5;
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.ArrowLeft){
                         yaw -= 5;
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.ArrowUp){
                         pitch -= 5;
-                        updatePos();
-                        return true;
+                        ok = true;
                     }
                     if(buttonStates.ArrowDown){
                         pitch += 5;
+                        ok = true;
+                    }
+                    if(ok){
                         updatePos();
                         return true;
                     }
@@ -166,10 +161,9 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                         if(!buttonStates[event.key]){
                             console.log(`onkeydown x: ${x}, y: ${y}`)
                             buttonStates[event.key] = true;
-                            if(tryUpdate()){
-                                event.preventDefault();
-                            }
+                            tryUpdate();
                         }
+                        event.preventDefault();
                     }
                 }
                 window.onkeyup = function(event){
