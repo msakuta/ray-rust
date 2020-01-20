@@ -1,7 +1,7 @@
 extern crate tokio;
 
 use crate::render::{render, RenderEnv, RenderColor};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use crate::quat::Quat;
@@ -16,11 +16,26 @@ use {
     std::net::SocketAddr,
 };
 
+use crate::vec3::Vec3;
+
+pub struct ServerState{
+    pub users: Vec<Vec3>,
+}
+
+impl ServerState{
+    pub fn new() -> Self{
+        Self{
+            users: vec![],
+        }
+    }
+}
+
 pub struct RenderParamStruct{
     pub width: usize,
     pub height: usize,
     pub thread_count: i32,
     pub ren: RenderEnv,
+    pub state: Mutex<ServerState>,
 }
 
 pub type RenderParams = Arc<RenderParamStruct>;
@@ -55,14 +70,22 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
     use std::f32::consts::PI;
 
     if req.uri() == "/" {
+        let user_id = if let Ok(ref mut state) = renparam.state.lock() {
+            let user_id = state.users.len();
+            state.users.push(Vec3::zero());
+            user_id
+        }
+        else { 0 };
+
         Ok(Response::new(Body::from("<html>
         <head>
             <title>ray-rust</title>
-            <script>
+            <script>".to_string()
+            + &format!("var id = {}", user_id) + "
             window.onload = function(){
                 var im = document.getElementById('render');
                 var label = document.getElementById('label');
-                ".to_string()
+                "
                 + &format!("
                 var x = {};
                 var y = {};
@@ -88,7 +111,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                     ArrowDown: false,
                 };
                 function updatePos(){
-                    fetch(`/render?x=${x}&y=${y}&z=${z}&yaw=${yaw}&pitch=${pitch}`)
+                    fetch(`/render?id=${id}&x=${x}&y=${y}&z=${z}&yaw=${yaw}&pitch=${pitch}`)
                         .then(function(response) {
                             if(response.ok) {
                                 return response.blob();
@@ -101,7 +124,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                         }).catch(function(error) {
                             console.log('There has been a problem with your fetch operation: ', error.message);
                         });
-                    label.innerHTML = `x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}<br>pitch=${pitch}`;
+                    label.innerHTML = `id=${id}<br>x=${x}<br>y=${y}<br>z=${z}<br>yaw=${yaw}<br>pitch=${pitch}`;
                 }
                 function tryUpdate(){
                     var ok = false;
@@ -172,6 +195,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                         event.preventDefault();
                     }
                 }
+                window.setInterval(updatePos, 100);
             }
             </script>
             <style>
@@ -218,11 +242,15 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
     }
     else if req.uri().path() == "/render" {
         println!("GET /render, query = {:?}", req.uri().query());
-        let (xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
+        let (user_id, xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
+            let mut user_id = 0;
             let [mut xpos, mut ypos, mut zpos, mut yaw, mut pitch] = [0f32; 5];
             for s in query.split("&") {
                 let tokens: Vec<_> = s.split("=").collect();
                 match tokens[..] {
+                    ["id", id] => if let Ok(f) = id.parse::<i32>() {
+                        user_id = f;
+                    }
                     ["x", x] => if let Ok(f) = x.parse::<f32>() {
                         xpos = f;
                     }
@@ -241,13 +269,21 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                     _ => ()
                 }
             }
-            (xpos, ypos, zpos, yaw, pitch)
+            (user_id as usize, xpos, ypos, zpos, yaw, pitch)
         }
         else {
-            (0., 0., 0., 0., 0.)
+            (0, 0., 0., 0., 0., 0.)
         };
-        println!("Rendering with xpos={}, ypos={}, zpos={}, yaw={} pitch={}",
-            xpos, ypos, zpos, yaw, pitch);
+        println!("Rendering with user_id={}, xpos={}, ypos={}, zpos={}, yaw={} pitch={}",
+            user_id, xpos, ypos, zpos, yaw, pitch);
+
+        if let Ok(ref mut state) = renparam.state.lock() {
+            if let Some(user) = state.users.get_mut(user_id) {
+                (*user).x = xpos;
+                (*user).y = ypos;
+                (*user).z = zpos;
+            }
+        }
 
         // Cloning a whole RenderEnv object is dumb, but probably faster than deserializing from
         // a file in every request, and we need to modify camera position.
@@ -258,6 +294,15 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
         ren.camera.pyr.y = yaw * PI / 180.;
         ren.camera.pyr.x = pitch * PI / 180.;
         ren.camera.rotation = Quat::from_pyr(&ren.camera.pyr);
+        if let Some(first_material) = ren.materials.iter().next() {
+            let state = renparam.state.lock().unwrap();
+            for (i,user) in state.users.iter().enumerate() {
+                if user_id != i {
+                    ren.objects.push(crate::render::RenderSphere::new(first_material.1.clone(),
+                        80.0, *user));
+                }
+            }
+        }
         let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
             renparam.width as u32, renparam.height as u32, render_web(&renparam, &ren)).unwrap());
         let mut buf: Vec<u8> = vec![];

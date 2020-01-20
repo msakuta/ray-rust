@@ -27,7 +27,7 @@ use render::{RenderColor,
     RenderEnv,
     render, render_frames};
 use vec3::Vec3;
-use webserver::{run_webserver, RenderParamStruct};
+use webserver::{run_webserver, RenderParamStruct, ServerState};
 
 
 fn main() -> std::io::Result<()> {
@@ -242,7 +242,8 @@ fn main() -> std::io::Result<()> {
             width,
             height,
             thread_count,
-            ren
+            ren,
+            state: std::sync::Mutex::new(ServerState::new()),
         }));
     }
 
