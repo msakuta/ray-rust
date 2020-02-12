@@ -29,7 +29,7 @@ use render::{RenderColor,
     RenderEnv,
     render, render_frames};
 use vec3::Vec3;
-use webserver::{run_webserver, RenderParamStruct};
+use webserver::{run_webserver, ServerParams};
 use clap::{Arg, crate_version, crate_authors};
 
 fn main() -> std::io::Result<()> {
@@ -38,17 +38,12 @@ fn main() -> std::io::Result<()> {
         .version(crate_version!())
         .author(crate_authors!())
         .arg(Arg::with_name("width")
-            .help("Width of the image")
+            .help("Width of the image [px]")
             .required(true)
         )
         .arg(Arg::with_name("height")
-            .help("Height of the image")
+            .help("Height of the image [px]")
             .required(true)
-        )
-        .arg(Arg::with_name("flg")
-            .help("sample flag")
-            .short("f")
-            .long("flag")
         )
         .arg(Arg::with_name("threads")
             .help("thread count")
@@ -76,13 +71,13 @@ fn main() -> std::io::Result<()> {
             .takes_value(true)
         )
         .arg(Arg::with_name("serialize_file")
-            .help("serialize_file file name")
+            .help("File name for serialized scene output. If omitted, scene is not output.")
             .short("s")
             .long("serialize_file")
             .takes_value(true)
         )
         .arg(Arg::with_name("deserialize_file")
-            .help("deserialize_file file name")
+            .help("File name for deserialized scene input. If omitted, default scene is loaded.")
             .short("d")
             .long("deserialize_file")
             .takes_value(true)
@@ -91,6 +86,13 @@ fn main() -> std::io::Result<()> {
             .help("Use web server")
             .short("w")
             .long("webserver")
+        )
+        .arg(Arg::with_name("port_no")
+            .help("Port number, if use web server")
+            .short("p")
+            .long("port_no")
+            .takes_value(true)
+            .default_value("3000")
         )
         .get_matches();
 
@@ -129,6 +131,7 @@ fn main() -> std::io::Result<()> {
     let serialize_file = parser_opt::<String>(&matches, "serialize_file");
     let deserialize_file = parser_opt::<String>(&matches, "deserialize_file");
     let webserver = matches.is_present("webserver");
+    let port_no = parser(&matches, "port_no");
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
     let ymax: usize = height/*	((YRES + 1) * 2)*/;
@@ -254,10 +257,11 @@ fn main() -> std::io::Result<()> {
     }
 
     if webserver {
-        return run_webserver(Arc::new(RenderParamStruct{
+        return run_webserver(Arc::new(ServerParams{
             width,
             height,
             thread_count,
+            port_no,
             ren
         }));
     }

@@ -16,16 +16,15 @@ use {
     std::net::SocketAddr,
 };
 
-pub struct RenderParamStruct{
+pub struct ServerParams{
     pub width: usize,
     pub height: usize,
     pub thread_count: i32,
+    pub port_no: u16,
     pub ren: RenderEnv,
 }
 
-pub type RenderParams = Arc<RenderParamStruct>;
-
-fn render_web(renparam: &RenderParamStruct, ren: &RenderEnv) -> Vec<u8>{
+fn render_web(renparam: &ServerParams, ren: &RenderEnv) -> Vec<u8>{
     let (width, height) = (renparam.width, renparam.height);
     let mut data = vec![0u8; 3 * width * height];
     
@@ -47,7 +46,7 @@ fn render_web(renparam: &RenderParamStruct, ren: &RenderEnv) -> Vec<u8>{
     data
 }
 
-async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Response<Body>, hyper::Error> {
+async fn serve_req(req: Request<Body>, renparam: Arc<ServerParams>) -> Result<Response<Body>, hyper::Error> {
     // Always return successfully with a response containing a body with
     // a friendly greeting ;)
     println!("Got request at {:?} in thread #{:?}", req.uri(), thread::current().id());
@@ -283,7 +282,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
     }
 }
 
-async fn run_server(addr: SocketAddr, ren: RenderParams) {
+async fn run_server(addr: SocketAddr, params: Arc<ServerParams>) {
     println!("Listening on http://{}", addr);
 
     // Create a server bound on the provided address
@@ -296,10 +295,10 @@ async fn run_server(addr: SocketAddr, ren: RenderParams) {
         // Hyper, we have to box it and put it in a compatability
         // wrapper to go from a futures 0.3 future (the kind returned by
         // `async fn`) to a futures 0.1 future (the kind used by Hyper).
-        // .serve(|| service_fn(|req| serve_req(req, ren.clone()).boxed().compat()));
-        .serve(make_payload_service(|_, ren| async move {
-            Ok::<_, Error>(payload_service(|req, ren| serve_req(req, ren), ren))
-        }, ren));
+        // .serve(|| service_fn(|req| serve_req(req, params.clone()).boxed().compat()));
+        .serve(make_payload_service(|_, params| async move {
+            Ok::<_, Error>(payload_service(|req, params| serve_req(req, params), params))
+        }, params));
 
     // Wait for the server to complete serving or exit with an error.
     // If an error occurred, print it to stderr.
@@ -308,9 +307,9 @@ async fn run_server(addr: SocketAddr, ren: RenderParams) {
     }
 }
 
-pub fn run_webserver(ren: RenderParams) -> std::io::Result<()>{
+pub fn run_webserver(ren: Arc<ServerParams>) -> std::io::Result<()>{
     // Set the address to run our socket on.
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], ren.as_ref().port_no));
 
     // Call our `run_server` function, which returns a future.
     // As with every `async fn`, for `run_server` to do anything,
