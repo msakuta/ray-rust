@@ -22,11 +22,11 @@ const BIGNORE: u32 = (1<<4);
 // const GONLY: u32 = (RIGNORE|BIGNORE);
 // const BONLY: u32 = (RIGNORE|GIGNORE);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct RenderColor{
     pub r: f32,
     pub g: f32,
-    pub b: f32/*, _*/
+    pub b: f32,
 }
 
 impl RenderColor{
@@ -39,12 +39,12 @@ impl RenderColor{
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum RenderPattern{
     Solid, Checkerboard, RepeatedGradation
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum UVMap{
     XY, YZ, ZX, LL,
 }
@@ -170,14 +170,14 @@ impl RenderMaterial{
     fn serialize(&self) -> RenderMaterialSerial{
         RenderMaterialSerial{
             name: self.name.clone(),
-            diffuse: self.diffuse.clone(),
-            specular: self.specular.clone(),
+            diffuse: self.diffuse,
+            specular: self.specular,
             pn: self.pn,
             t: self.t,
             n: self.n,
             glow_dist: self.glow_dist,
-            frac: self.frac.clone(),
-            pattern: self.pattern.clone(),
+            frac: self.frac,
+            pattern: self.pattern,
             pattern_scale: self.pattern_scale,
             pattern_angle_scale: self.pattern_angle_scale,
             texture_name: self.texture_name.clone(),
@@ -188,14 +188,14 @@ impl RenderMaterial{
     fn deserialize(obj: &RenderMaterialSerial) -> Result<RenderMaterial, DeserializeError>{
         Ok(RenderMaterial{
             name: obj.name.clone(),
-            diffuse: obj.diffuse.clone(),
-            specular: obj.specular.clone(),
+            diffuse: obj.diffuse,
+            specular: obj.specular,
             pn: obj.pn,
             t: obj.t,
             n: obj.n,
             glow_dist: obj.glow_dist,
-            frac: obj.frac.clone(),
-            pattern: obj.pattern.clone(),
+            frac: obj.frac,
+            pattern: obj.pattern,
             pattern_scale: obj.pattern_scale,
             pattern_angle_scale: obj.pattern_angle_scale,
             texture_name: obj.texture_name.clone(),
@@ -376,7 +376,7 @@ impl RenderSphere{
             .ok_or(DeserializeError::new(&format!("RenderSphere couldn't find material {}", serial.material)))?
             .clone(),
             serial.r, serial.org)
-            .uvmap(serial.uvmap.clone())))
+            .uvmap(serial.uvmap)))
     }
 }
 
@@ -433,7 +433,7 @@ impl RenderObjectInterface for RenderSphere{
             material: self.material.name.clone(),
             org: self.org,
             r: self.r,
-            uvmap: self.uvmap.clone(),
+            uvmap: self.uvmap,
         })
     }
 }
@@ -483,7 +483,7 @@ impl RenderFloor{
             .ok_or(DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
             .clone(),
             serial.org, serial.face_normal)
-            .uvmap(serial.uvmap.clone())))
+            .uvmap(serial.uvmap)))
     }
 }
 
@@ -525,7 +525,7 @@ impl RenderObjectInterface for RenderFloor{
             material: self.material.name.clone(),
             org: self.org,
             face_normal: self.face_normal,
-            uvmap: self.uvmap.clone(),
+            uvmap: self.uvmap,
         })
     }
 }
