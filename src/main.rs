@@ -30,7 +30,7 @@ use render::{RenderColor,
     render, render_frames};
 use vec3::Vec3;
 use webserver::{run_webserver, ServerParams};
-use clap::{Arg, crate_version, crate_authors};
+use clap::{Arg, crate_version, crate_authors, value_t};
 
 fn main() -> std::io::Result<()> {
 
@@ -65,7 +65,7 @@ fn main() -> std::io::Result<()> {
             .long("raymarch")
         )
         .arg(Arg::with_name("gloweffect")
-            .help("Use glow effect")
+            .help("Enable glow effect and set its strength when ray marching method is used")
             .short("g")
             .long("gloweffect")
             .takes_value(true)
@@ -83,7 +83,8 @@ fn main() -> std::io::Result<()> {
             .takes_value(true)
         )
         .arg(Arg::with_name("webserver")
-            .help("Use web server")
+            .help("Launch a web server that responds with rendered image, rather than producing static images.
+Good for interactive session.")
             .short("w")
             .long("webserver")
         )
@@ -100,9 +101,7 @@ fn main() -> std::io::Result<()> {
         where Output: FromStr + Display,
             <Output as FromStr>::Err : Debug
     {
-        let ret = matches.value_of(name)
-            .expect(format!("{} must be specified", name).as_str())
-            .parse::<Output>()
+        let ret = value_t!(matches, name, Output)
             .expect(format!("Parsing {} failed", name).as_str());
         println!("Value for {}: {}", name, ret);
         ret
@@ -113,8 +112,7 @@ fn main() -> std::io::Result<()> {
         where Output: FromStr + Display,
             <Output as FromStr>::Err : Debug
     {
-        let ret = matches.value_of(name)?
-            .parse::<Output>();
+        let ret = value_t!(matches, name, Output);
         if let Ok(ref dbg) = ret {
             println!("Value for {}: {}", name, dbg);
         }
