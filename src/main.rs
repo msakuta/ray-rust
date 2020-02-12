@@ -30,13 +30,13 @@ use render::{RenderColor,
     render, render_frames};
 use vec3::Vec3;
 use webserver::{run_webserver, RenderParamStruct};
-use clap::Arg;
+use clap::{Arg, crate_version, crate_authors};
 
 fn main() -> std::io::Result<()> {
 
     let matches = clap::App::new("ray-rust")
-        .version("0.1.0")
-        .author("myname <myname@mail.com>")
+        .version(crate_version!())
+        .author(crate_authors!())
         .arg(Arg::with_name("width")
             .help("Width of the image")
             .required(true)
