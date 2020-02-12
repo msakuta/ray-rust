@@ -4,12 +4,14 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
+extern crate clap;
 
-use std::env;
 use std::time::Instant;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::str::FromStr;
+use std::fmt::{Display, Debug};
 use image::ColorType;
 
 mod render;
@@ -28,91 +30,105 @@ use render::{RenderColor,
     render, render_frames};
 use vec3::Vec3;
 use webserver::{run_webserver, RenderParamStruct};
-
+use clap::Arg;
 
 fn main() -> std::io::Result<()> {
 
-    if env::args().len() <= 1 {
-        println!("usage: {} [width] [height] [-o output] [-t thread_count] [-m] [-g glow_dist] [-s serialized.yaml] [-d serialized.yaml]", env::args().nth(0).unwrap());
-        return Ok(());
+    let matches = clap::App::new("ray-rust")
+        .version("0.1.0")
+        .author("myname <myname@mail.com>")
+        .arg(Arg::with_name("width")
+            .help("Width of the image")
+            .required(true)
+        )
+        .arg(Arg::with_name("height")
+            .help("Height of the image")
+            .required(true)
+        )
+        .arg(Arg::with_name("flg")
+            .help("sample flag")
+            .short("f")
+            .long("flag")
+        )
+        .arg(Arg::with_name("threads")
+            .help("thread count")
+            .short("t")
+            .long("threads")
+            .takes_value(true)
+            .default_value("8")
+        )
+        .arg(Arg::with_name("output")
+            .help("Output file name")
+            .short("o")
+            .long("output")
+            .takes_value(true)
+            .default_value("foo.png")
+        )
+        .arg(Arg::with_name("raymarch")
+            .help("Use ray marching")
+            .short("m")
+            .long("raymarch")
+        )
+        .arg(Arg::with_name("gloweffect")
+            .help("Use glow effect")
+            .short("g")
+            .long("gloweffect")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("serialize_file")
+            .help("serialize_file file name")
+            .short("s")
+            .long("serialize_file")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("deserialize_file")
+            .help("deserialize_file file name")
+            .short("d")
+            .long("deserialize_file")
+            .takes_value(true)
+        )
+        .arg(Arg::with_name("webserver")
+            .help("Use web server")
+            .short("w")
+            .long("webserver")
+        )
+        .get_matches();
+
+    fn parser<Output>(matches: &clap::ArgMatches, name: &str) -> Output
+        where Output: FromStr + Display,
+            <Output as FromStr>::Err : Debug
+    {
+        let ret = matches.value_of(name)
+            .expect(format!("{} must be specified", name).as_str())
+            .parse::<Output>()
+            .expect(format!("Parsing {} failed", name).as_str());
+        println!("Value for {}: {}", name, ret);
+        ret
     }
 
-    let (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file, webserver):
-        (usize, usize, String, i32, bool, bool, f32, String, String, bool) = {
-        let mut width = 640;
-        let mut width_set = false;
-        let mut height = 480;
-        let mut height_set = false;
-        let mut output = "foo.png".to_string();
-        let mut use_raymarching = false;
-        let mut use_glow_effect = false;
-        let mut glow_effect = 1.;
-        let mut thread_count = 8;
-        let mut serialize_file = "".to_string();
-        let mut deserialize_file = "".to_string();
-        let mut webserver = false;
-        #[derive(PartialEq)]
-        enum Next{Default, Output, ThreadCount, GlowEffect, SerializeFile, DeserializeFile}
-        let mut next = Next::Default;
-        for arg in env::args().skip(1) {
-            match next {
-                Next::Output => {
-                    output = arg.clone();
-                    next = Next::Default;
-                },
-                Next::ThreadCount => {
-                    thread_count = arg.parse().expect("thread count must be an int");
-                    assert!(1 <= thread_count);
-                    next = Next::Default;
-                },
-                Next::GlowEffect => {
-                    glow_effect = arg.parse().expect("thread count must be an int");
-                    next = Next::Default;
-                },
-                Next::SerializeFile => {
-                    serialize_file = arg;
-                    next = Next::Default;
-                }
-                Next::DeserializeFile => {
-                    deserialize_file = arg;
-                    next = Next::Default;
-                }
-                Next::Default => {
-                    if arg == "-o" {
-                        next = Next::Output;
-                    }
-                    else if arg == "-t" {
-                        next = Next::ThreadCount;
-                    }
-                    else if arg == "-m" {
-                        use_raymarching = true;
-                    }
-                    else if arg == "-g" {
-                        use_glow_effect = true;
-                        next = Next::GlowEffect;
-                    }
-                    else if arg == "-s" {
-                        next = Next::SerializeFile;
-                    }
-                    else if arg == "-d" {
-                        next = Next::DeserializeFile;
-                    }
-                    else if arg == "-w" {
-                        webserver = true;
-                    }
-                    else if !width_set {
-                        width = arg.parse().expect("width must be an int");
-                        width_set = true;
-                    }
-                    else if !height_set {
-                        height = arg.parse().expect("height must be an int");
-                        height_set = true;
-                    }
-                }
-            }
+    /// Parser procedure for optional parameter
+    fn parser_opt<Output>(matches: &clap::ArgMatches, name: &str) -> Option<Output>
+        where Output: FromStr + Display,
+            <Output as FromStr>::Err : Debug
+    {
+        let ret = matches.value_of(name)?
+            .parse::<Output>();
+        if let Ok(ref dbg) = ret {
+            println!("Value for {}: {}", name, dbg);
         }
-        (width, height, output, thread_count, use_raymarching, use_glow_effect, glow_effect, serialize_file, deserialize_file, webserver)
-    };
+        ret.ok()
+    }
+
+    let width = parser(&matches, "width");
+    let height = parser(&matches, "height");
+    let thread_count = parser(&matches, "threads");
+    let output: String = parser(&matches, "output");
+
+    let use_raymarching = matches.is_present("raymarch");
+    let glow_effect = parser_opt(&matches, "gloweffect");
+    let serialize_file = parser_opt::<String>(&matches, "serialize_file");
+    let deserialize_file = parser_opt::<String>(&matches, "deserialize_file");
+    let webserver = matches.is_present("webserver");
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
     let ymax: usize = height/*	((YRES + 1) * 2)*/;
@@ -220,10 +236,10 @@ fn main() -> std::io::Result<()> {
         bgcolor, /* bgproc */
     ).light(Vec3::new(50., 60., -50.))
     .use_raymarching(use_raymarching)
-    .use_glow_effect(use_glow_effect, glow_effect);
+    .glow_effect(glow_effect);
 
-    if deserialize_file != "" {
-        let mut file = std::fs::File::open(deserialize_file)?;
+    if let Some(file_name) = deserialize_file {
+        let mut file = std::fs::File::open(file_name)?;
         let mut buf = String::new();
         file.read_to_string(&mut buf)?;
         ren.deserialize(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other,
@@ -246,8 +262,8 @@ fn main() -> std::io::Result<()> {
         }));
     }
 
-    if serialize_file != "" {
-        let mut file = std::fs::File::create(serialize_file)?;
+    if let Some(file_name) = serialize_file {
+        let mut file = std::fs::File::create(file_name)?;
         file.write_all(&ren.serialize()?.bytes().collect::<Vec<u8>>())?;
     }
 
