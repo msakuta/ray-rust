@@ -16,17 +16,16 @@ use {
     std::net::SocketAddr,
 };
 
-pub struct RenderParamStruct{
+pub struct ServerParams{
     pub width: usize,
     pub height: usize,
     pub thread_count: i32,
+    pub port_no: u16,
     pub ren: RenderEnv,
 }
 
-pub type RenderParams = Arc<RenderParamStruct>;
-
-fn render_web(renparam: &RenderParamStruct, ren: &RenderEnv) -> Vec<u8>{
-    let (width, height) = (renparam.width, renparam.height);
+fn render_web(params: &ServerParams, ren: &RenderEnv) -> Vec<u8>{
+    let (width, height) = (params.width, params.height);
     let mut data = vec![0u8; 3 * width * height];
     
     for y in 0..height {
@@ -43,13 +42,11 @@ fn render_web(renparam: &RenderParamStruct, ren: &RenderEnv) -> Vec<u8>{
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
 
-    render(&ren, &mut putpoint, renparam.thread_count);
+    render(&ren, &mut putpoint, params.thread_count);
     data
 }
 
-async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Response<Body>, hyper::Error> {
-    // Always return successfully with a response containing a body with
-    // a friendly greeting ;)
+async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Response<Body>, hyper::Error> {
     println!("Got request at {:?} in thread #{:?}", req.uri(), thread::current().id());
 
     use std::f32::consts::PI;
@@ -69,11 +66,11 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
                 var z = {};
                 var yaw = {};
                 var pitch = {};\n",
-                renparam.ren.camera.position.x,
-                renparam.ren.camera.position.y,
-                renparam.ren.camera.position.z,
-                renparam.ren.camera.pyr.y * 180. / PI,
-                renparam.ren.camera.pyr.x * 180. / PI)
+                params.ren.camera.position.x,
+                params.ren.camera.position.y,
+                params.ren.camera.position.z,
+                params.ren.camera.pyr.y * 180. / PI,
+                params.ren.camera.pyr.x * 180. / PI)
                 + "
                 var buttonStates = {
                     w: false,
@@ -251,7 +248,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
 
         // Cloning a whole RenderEnv object is dumb, but probably faster than deserializing from
         // a file in every request, and we need to modify camera position.
-        let mut ren = renparam.ren.clone();
+        let mut ren = params.ren.clone();
         ren.camera.position.x = xpos;
         ren.camera.position.y = ypos;
         ren.camera.position.z = zpos;
@@ -259,7 +256,7 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
         ren.camera.pyr.x = pitch * PI / 180.;
         ren.camera.rotation = Quat::from_pyr(&ren.camera.pyr);
         let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
-            renparam.width as u32, renparam.height as u32, render_web(&renparam, &ren)).unwrap());
+            params.width as u32, params.height as u32, render_web(&params, &ren)).unwrap());
         let mut buf: Vec<u8> = vec![];
         if let Ok(_) = imbuf.write_to(&mut buf, image::ImageOutputFormat::PNG) {
             // let enc = image::png::PNGEncoder::new();
@@ -283,23 +280,14 @@ async fn serve_req(req: Request<Body>, renparam: RenderParams) -> Result<Respons
     }
 }
 
-async fn run_server(addr: SocketAddr, ren: RenderParams) {
+async fn run_server(addr: SocketAddr, params: Arc<ServerParams>) {
     println!("Listening on http://{}", addr);
 
     // Create a server bound on the provided address
     let serve_future = Server::bind(&addr)
-        // Serve requests using our `async serve_req` function.
-        // `serve` takes a closure which returns a type implementing the
-        // `Service` trait. `service_fn` returns a value implementing the
-        // `Service` trait, and accepts a closure which goes from request
-        // to a future of the response. To use our `serve_req` function with
-        // Hyper, we have to box it and put it in a compatability
-        // wrapper to go from a futures 0.3 future (the kind returned by
-        // `async fn`) to a futures 0.1 future (the kind used by Hyper).
-        // .serve(|| service_fn(|req| serve_req(req, ren.clone()).boxed().compat()));
-        .serve(make_payload_service(|_, ren| async move {
-            Ok::<_, Error>(payload_service(|req, ren| serve_req(req, ren), ren))
-        }, ren));
+        .serve(make_payload_service(|_, params| async move {
+            Ok::<_, Error>(payload_service(|req, params| serve_req(req, params), params))
+        }, params));
 
     // Wait for the server to complete serving or exit with an error.
     // If an error occurred, print it to stderr.
@@ -308,27 +296,13 @@ async fn run_server(addr: SocketAddr, ren: RenderParams) {
     }
 }
 
-pub fn run_webserver(ren: RenderParams) -> std::io::Result<()>{
-    // Set the address to run our socket on.
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+pub fn run_webserver(params: Arc<ServerParams>) -> std::io::Result<()>{
+    let addr = SocketAddr::from(([0, 0, 0, 0], params.as_ref().port_no));
 
-    // Call our `run_server` function, which returns a future.
-    // As with every `async fn`, for `run_server` to do anything,
-    // the returned future needs to be run. Additionally,
-    // we need to convert the returned future from a futures 0.3 future into a
-    // futures 0.1 future.
-    let futures_03_future = run_server(addr, ren);
-        // |req: Request<Body>| async {
-        //     // let ren_clone = ren.clone();
-        //     serve_req(req/*, ren_clone*/).await
-        // });
-    // let futures_01_future = futures_03_future.unit_error().boxed().compat();
+    let future = run_server(addr, params);
 
-    // Finally, we can run the future to completion using the `run` function
-    // provided by Hyper.
-    // run(futures_01_future);
     let mut rt = Runtime::new()?;
-    rt.block_on(futures_03_future);
+    rt.block_on(future);
 
     Ok(())
 }

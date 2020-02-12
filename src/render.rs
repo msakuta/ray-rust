@@ -608,8 +608,7 @@ pub struct RenderEnv{
     pub light: Vec3,
     pub bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor,
     pub use_raymarching: bool,
-    pub use_glow_effect: bool,
-    glow_effect: f32,
+    glow_effect: Option<f32>,
     pub max_reflections: i32,
     pub max_refractions: i32,
 }
@@ -653,8 +652,7 @@ impl RenderEnv{
             light: Vec3::new(0., 0., 1.),
             bgproc,
             use_raymarching: false,
-            use_glow_effect: false,
-            glow_effect: 1.,
+            glow_effect: None,
             max_reflections: MAX_REFLECTIONS,
             max_refractions: MAX_REFRACTIONS,
         }
@@ -670,8 +668,7 @@ impl RenderEnv{
         self
     }
 
-    pub fn use_glow_effect(mut self, f: bool, v: f32) -> Self{
-        self.use_glow_effect = f;
+    pub fn glow_effect(mut self, v: Option<f32>) -> Self{
         self.glow_effect = v;
         self
     }
@@ -1230,9 +1227,9 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 	}
     // println!("raymarch loop end {:?}", eye);
 
-    (if ren.use_glow_effect {
+    (if let Some(glow_effect) = ren.glow_effect {
         let factor = if min_min_dist == std::f32::INFINITY { 1. }
-            else { 1. + (0. + ren.glow_effect * (0.99f32).powf(min_min_dist)) };
+            else { 1. + (0. + glow_effect * (0.99f32).powf(min_min_dist)) };
         RenderColor::new(
             factor * ret_color.r,
             factor * ret_color.g,
