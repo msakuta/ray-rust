@@ -32,7 +32,7 @@ impl Quat{
     }
 
     pub fn squared_len(&self) -> f32{
-        (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w)
+        self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
     }
 
     pub fn len(&self) -> f32 {

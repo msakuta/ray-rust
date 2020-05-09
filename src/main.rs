@@ -160,7 +160,7 @@ Good for interactive session.")
         .pattern_scale(300.)
         .pattern_angle_scale(0.2)
         .texture_ok("bar.png"));
-    materials.insert("floor".to_string(), floor_material.clone());
+    materials.insert("floor".to_string(), floor_material);
 
     let mirror_material = Arc::new(RenderMaterial::new("mirror".to_string(),
         RenderColor::new(0.0, 0.0, 0.0), RenderColor::new(1.0, 1.0, 1.0), 24, 0., 0.0)

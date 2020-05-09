@@ -26,7 +26,7 @@ impl Vec3{
     }
 
     pub fn squared_len(&self) -> f32{
-        (self.x * self.x + self.y * self.y + self.z * self.z)
+        self.x * self.x + self.y * self.y + self.z * self.z
     }
 
     pub fn len(&self) -> f32 {

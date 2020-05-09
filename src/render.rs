@@ -14,10 +14,10 @@ pub const MAX_REFRACTIONS: i32 = 10;
 
 
 const OUTONLY: u32 = 1;
-const INONLY: u32 = (1<<1);
-const RIGNORE: u32 = (1<<2);
-const GIGNORE: u32 = (1<<3);
-const BIGNORE: u32 = (1<<4);
+const INONLY: u32 = 1<<1;
+const RIGNORE: u32 = 1<<2;
+const GIGNORE: u32 = 1<<3;
+const BIGNORE: u32 = 1<<4;
 // const RONLY: u32 = (GIGNORE|BIGNORE);
 // const GONLY: u32 = (RIGNORE|BIGNORE);
 // const BONLY: u32 = (RIGNORE|GIGNORE);
@@ -261,11 +261,11 @@ impl RenderMaterialInterface for RenderMaterial{
             RenderPattern::Checkerboard => {
                 let ix = u.floor() as i32;
                 let iy = v.floor() as i32;
-                (if (ix + iy) % 2 == 0 {
+                if (ix + iy) % 2 == 0 {
                     RenderColor::new(0., 0., 0.)
                 } else {
                     self.diffuse
-                })
+                }
             }
             RenderPattern::RepeatedGradation => {
                 RenderColor::new(
@@ -1243,7 +1243,7 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 	}
     // println!("raymarch loop end {:?}", eye);
 
-    (if let Some(glow_effect) = ren.glow_effect {
+    if let Some(glow_effect) = ren.glow_effect {
         let factor = if min_min_dist == std::f32::INFINITY { 1. }
             else { 1. + (0. + glow_effect * (0.99f32).powf(min_min_dist)) };
         RenderColor::new(
@@ -1253,6 +1253,6 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
     }
     else{
         ret_color
-    })
+    }
 }
 
