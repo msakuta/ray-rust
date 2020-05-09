@@ -5,7 +5,7 @@ pub type PixelF = image::Rgb<f32>;
 pub fn add_pixel(a: PixelF, b: &PixelF) -> PixelF{
     image::Rgb::<f32>([a[0] as f32 + b[0] as f32, a[1] as f32 + b[1] as f32, a[2] as f32 + b[2] as f32])
 }
-pub fn scale_pixel(s: f32, a: &Pixel) -> PixelF{
+pub fn scale_pixel(s: f32, a: Pixel) -> PixelF{
     image::Rgb::<f32>([s * a[0] as f32, s * a[1] as f32, s * a[2] as f32])
 }
 

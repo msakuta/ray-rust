@@ -102,7 +102,7 @@ Good for interactive session.")
             <Output as FromStr>::Err : Debug
     {
         let ret = value_t!(matches, name, Output)
-            .expect(format!("Parsing {} failed", name).as_str());
+            .unwrap_or_else(|_| panic!("Parsing {} failed", name));
         println!("Value for {}: {}", name, ret);
         ret
     }
@@ -140,14 +140,14 @@ Good for interactive session.")
 
     for y in 0..height {
         for x in 0..width {
-            data[(x + y * width) * 3 + 0] = ((x) * 255 / width) as u8;
+            data[(x + y * width) * 3    ] = ((x) * 255 / width) as u8;
             data[(x + y * width) * 3 + 1] = ((y) * 255 / height) as u8;
             data[(x + y * width) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
-        data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3    ] = (fc.r * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
@@ -232,10 +232,11 @@ Good for interactive session.")
         xfov,
         yfov, /* xfov, yfov*/
         //pointproc: putpoint, /* pointproc */
-        materials,
-        objects,
         bgcolor, /* bgproc */
-    ).light(Vec3::new(50., 60., -50.))
+    )
+    .materials(materials)
+    .objects(objects)
+    .light(Vec3::new(50., 60., -50.))
     .use_raymarching(use_raymarching)
     .glow_effect(glow_effect);
 
@@ -271,7 +272,7 @@ Good for interactive session.")
 
     let start = Instant::now();
 
-    let ret = if 0 < ren.camera_motion.0.len() {
+    let ret = if !ren.camera_motion.0.is_empty() {
         render_frames(&mut ren, width, height, &mut |i, data| {
             let frame_output = format!("{}{}.png", output, i);
             image::save_buffer(frame_output, &data, width as u32, height as u32, ColorType::RGB(8)).ok();
@@ -279,12 +280,12 @@ Good for interactive session.")
         Ok(())
     }
     else {
-        render(&mut ren, &mut putpoint, thread_count);
+        render(&ren, &mut putpoint, thread_count);
 
         image::save_buffer(output, &data, width as u32, height as u32, ColorType::RGB(8))
     };
 
     let end = start.elapsed();
-    println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_nanos() / 1_000);
+    println!("Rendering time: {}.{:06}", end.as_secs(), end.subsec_micros());
     ret
 }

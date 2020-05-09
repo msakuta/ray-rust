@@ -13,7 +13,7 @@ pub const MAX_REFLECTIONS: i32 = 3;
 pub const MAX_REFRACTIONS: i32 = 10;
 
 
-const OUTONLY: u32 = (1<<0);
+const OUTONLY: u32 = 1;
 const INONLY: u32 = (1<<1);
 const RIGNORE: u32 = (1<<2);
 const GIGNORE: u32 = (1<<3);
@@ -156,7 +156,8 @@ impl RenderMaterial{
     /// Error when open image failed
     pub fn texture(mut self, texture_name: &str) -> Result<Self, io::Error>{
         self.texture_name = String::from(texture_name);
-        self.texture = Some(image::open(texture_name).or(Err(io::Error::new(io::ErrorKind::Other, "texture image file load failed")))?);
+        self.texture = Some(image::open(texture_name).or_else(
+            |_|Err(io::Error::new(io::ErrorKind::Other, "texture image file load failed")))?);
         Ok(self)
     }
 
@@ -204,7 +205,7 @@ impl RenderMaterial{
         })
     }
 
-    fn get_uv(&self, pos: &Vec3, uvmap: &UVMap) -> (f32, f32) {
+    fn get_uv(&self, pos: &Vec3, uvmap: UVMap) -> (f32, f32) {
         match uvmap {
             UVMap::XY => (pos.x / self.pattern_scale, pos.y / self.pattern_scale),
             UVMap::YZ => (pos.y / self.pattern_scale, pos.z / self.pattern_scale),
@@ -246,24 +247,24 @@ impl RenderMaterialInterface for RenderMaterial{
                     let (fv, iv) = fimod(v * texture.height() as f32, texture.height() as f32);
                     let zero: PixelF = image::Rgb::<f32>([0f32; 3]);
                     let pixel = [
-                        scale_pixel((1. - fu) * (1. - fv), texture.get_pixel(iu, iv)),
-                        scale_pixel((1. - fu) * fv, texture.get_pixel(iu, umod(iv + 1, texture.height()))),
-                        scale_pixel(fu * (1. - fv),  texture.get_pixel(umod(iu + 1, texture.width()), iv)),
-                        scale_pixel(fu * fv, texture.get_pixel(umod(iu + 1, texture.width()), umod(iv + 1, texture.height()))),
+                        scale_pixel((1. - fu) * (1. - fv), *texture.get_pixel(iu, iv)),
+                        scale_pixel((1. - fu) * fv, *texture.get_pixel(iu, umod(iv + 1, texture.height()))),
+                        scale_pixel(fu * (1. - fv),  *texture.get_pixel(umod(iu + 1, texture.width()), iv)),
+                        scale_pixel(fu * fv, *texture.get_pixel(umod(iu + 1, texture.width()), umod(iv + 1, texture.height()))),
                     ].iter().fold(zero, add_pixel);
                     return RenderColor{r: pixel[0] as f32 / 256., g: pixel[1] as f32 / 256., b: pixel[2] as f32 / 256.};
                 }
             }
         }
         match self.pattern {
-            RenderPattern::Solid => self.diffuse.clone(),
+            RenderPattern::Solid => self.diffuse,
             RenderPattern::Checkerboard => {
                 let ix = u.floor() as i32;
                 let iy = v.floor() as i32;
                 (if (ix + iy) % 2 == 0 {
                     RenderColor::new(0., 0., 0.)
                 } else {
-                    self.diffuse.clone()
+                    self.diffuse
                 })
             }
             RenderPattern::RepeatedGradation => {
@@ -340,6 +341,7 @@ pub struct RenderSphere{
 }
 
 impl RenderSphere{
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         material: Arc<RenderMaterial>,
         r: f32,
@@ -373,7 +375,7 @@ impl RenderSphere{
     fn deserialize(ren: &RenderEnv, serial: &RenderSphereSerial) -> Result<RenderObject, DeserializeError>{
         Ok(RenderObject::Sphere(
             Self::new_raw(ren.materials.get(&serial.material)
-            .ok_or(DeserializeError::new(&format!("RenderSphere couldn't find material {}", serial.material)))?
+            .ok_or_else(|| DeserializeError::new(&format!("RenderSphere couldn't find material {}", serial.material)))?
             .clone(),
             serial.r, serial.org)
             .uvmap(serial.uvmap)))
@@ -386,11 +388,11 @@ impl RenderObjectInterface for RenderSphere{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(self.material.get_uv(&(*position - self.org), &self.uvmap))
+        self.material.lookup_texture(self.material.get_uv(&(*position - self.org), self.uvmap))
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
-        self.material.specular.clone()
+        self.material.specular
     }
 
     fn get_normal(&self, position: &Vec3) -> Vec3{
@@ -448,6 +450,7 @@ pub struct RenderFloor{
 
 impl RenderFloor{
     #[allow(dead_code)]
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         material: Arc<RenderMaterial>,
         org: Vec3,
@@ -480,7 +483,7 @@ impl RenderFloor{
 
     fn deserialize(ren: &RenderEnv, serial: &RenderFloorSerial) -> Result<RenderObject, DeserializeError>{
         Ok(RenderObject::Floor(Self::new_raw(ren.materials.get(&serial.material)
-            .ok_or(DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
+            .ok_or_else(|| DeserializeError::new(&format!("RenderFloor couldn't find material {}", serial.material)))?
             .clone(),
             serial.org, serial.face_normal)
             .uvmap(serial.uvmap)))
@@ -493,11 +496,11 @@ impl RenderObjectInterface for RenderFloor{
     }
 
     fn get_diffuse(&self, position: &Vec3) -> RenderColor{
-        self.material.lookup_texture(self.material.get_uv(&(position - &self.org), &self.uvmap))
+        self.material.lookup_texture(self.material.get_uv(&(position - &self.org), self.uvmap))
     }
 
     fn get_specular(&self, _position: &Vec3) -> RenderColor{
-        self.material.specular.clone()
+        self.material.specular
     }
 
     fn get_normal(&self, _: &Vec3) -> Vec3{
@@ -632,8 +635,6 @@ impl RenderEnv{
         yres: i32,
         xfov: f32,
         yfov: f32,
-        materials: HashMap<String, Arc<RenderMaterial>>,
-        objects: Vec<RenderObject>,
         bgproc: fn(ren: &RenderEnv, pos: &Vec3) -> RenderColor
     ) -> Self{
         RenderEnv{
@@ -647,8 +648,8 @@ impl RenderEnv{
             yres,
             xfov,
             yfov,
-            materials,
-            objects,
+            materials: HashMap::new(),
+            objects: Vec::new(),
             light: Vec3::new(0., 0., 1.),
             bgproc,
             use_raymarching: false,
@@ -656,6 +657,16 @@ impl RenderEnv{
             max_reflections: MAX_REFLECTIONS,
             max_refractions: MAX_REFRACTIONS,
         }
+    }
+
+    pub fn materials(mut self, materials: HashMap<String, Arc<RenderMaterial>>) -> Self{
+        self.materials = materials;
+        self
+    }
+
+    pub fn objects(mut self, objects: Vec<RenderObject>) -> Self{
+        self.objects = objects;
+        self
     }
 
     pub fn light(mut self, light: Vec3) -> Self{
@@ -738,8 +749,8 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
             eye = ren.camera.rotation.transform(&eye).normalized();
 
             point_middle(ix, iy,
-                if ren.use_raymarching { raymarch } else
-                { raytrace }(ren, &mut vi, &mut eye, 0, None, 0) );
+                if ren.use_raymarching { raymarch } else { raytrace }
+                (ren, &mut vi, &mut eye, 0, None, 0) );
         }
     };
 
@@ -795,7 +806,7 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
             }
 
             for (_iy,h) in handles.into_iter().enumerate() {
-                if let Ok(_) = h.join() {
+                if h.join().is_ok() {
                 }
                 else {
                     println!("Join failed");
@@ -805,6 +816,11 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
     }
 }
 
+// This warning is stupid, these variables are intermediate variables for the
+// function, so having long name wouldn't help to understand.  Anyone who needs
+// to understand what this function does needs to look into Hermite interpolation
+// and fully understand it anyways.
+#[allow(clippy::many_single_char_names)]
 fn hermite_interpolate_f32(t: f32, x0: f32, x1: f32, v0: f32, v1: f32) -> f32{
     let h = 1.;
     let d = x0;
@@ -854,7 +870,7 @@ pub fn render_frames(ren: &mut RenderEnv, width: usize, height: usize,
             let data = {
                 let mut data = vec![0u8; 3 * width * height];
                 let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
-                    data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
+                    data[(x as usize + y as usize * width) * 3    ] = (fc.r * 255.).min(255.) as u8;
                     data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
                     data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
                 };
@@ -911,13 +927,13 @@ fn shading(ren: &RenderEnv,
         /* scalar product of light normal and surface normal */
         let light_incidence = ren.light.dot(n);
         let ln2 = 2.0 * light_incidence;
-        let reflected_ray_to_light_source = &(n * ln2) - &ren.light;
+        let reflected_ray_to_light_source = (n * ln2) - ren.light;
 
         let eps = std::f32::EPSILON;
         let pn = o.get_material().get_phong_number();
         (
             light_incidence.max(0.),
-            *pt + (&ren.light * eps),
+            *pt + (ren.light * eps),
             if 0 != pn {
                 let reflection_incidence = -reflected_ray_to_light_source.dot(eye);
                 if reflection_incidence > 0.0 { reflection_incidence.powi(pn) }
@@ -929,11 +945,11 @@ fn shading(ren: &RenderEnv,
 
     /* shadow trace */
     let (k1, k2) = {
-        let ray: Vec3 = ren.light.clone();
+        let ray: Vec3 = ren.light;
         let k1 = 0.2;
         if ren.use_raymarching {
             let RaymarchSingleResult{
-                final_dist: _, idx, pos: _, iter, travel_dist, min_dist: _} = raymarch_single(ren, &reflected_ray, &ray, Some(&ren.objects[idx]));
+                iter, travel_dist, ..} = raymarch_single(ren, &reflected_ray, &ray, Some(&ren.objects[idx]));
             if FAR_AWAY <= travel_dist || MAX_ITER <= iter || 0. < ren.objects[idx].get_interface().get_material().get_transparency() {
                 ((k1 + diffuse_intensity).min(1.), reflection_intensity)
             }
@@ -970,7 +986,7 @@ fn shading(ren: &RenderEnv,
 			let reference = sp * (if sp > 0. { frac } else { 1. / frac } - 1.);
             let mut ray = (*eye + (n * reference)).normalized();
             let eps = std::f32::EPSILON;
-			let mut pt3 = *pt + (&ray * eps);
+			let mut pt3 = *pt + (ray * eps);
             (if ren.use_raymarching { raymarch }
                 else { raytrace })(ren, &mut pt3, &mut ray, nest,
                 Some(&ren.objects[idx]), if sp < 0. { OUTONLY } else { INONLY })
@@ -1020,7 +1036,7 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
 
             /* shared point */
             // What a terrible formula... it's almost impractical to use it everywhere.
-            let pt = (&*eye * t) + *vi;
+            let pt = (*eye * t) + *vi;
 
             let o = &ren.objects[idx].get_interface();
             let n = o.get_normal(&pt);
@@ -1046,9 +1062,9 @@ fn raytrace(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
                 break;
             }
 
-			*vi = pt.clone();
+			*vi = pt;
 			let en2 = -2.0 * eye.dot(&n);
-			*eye += &n * en2;
+			*eye += n * en2;
 
 			if n.dot(&eye) < 0. {
                 flags &= !INONLY;
@@ -1126,7 +1142,7 @@ fn raymarch_single(ren: &RenderEnv, init_pos: &Vec3, eye: &Vec3, ig: Option<&Ren
     let mut min_dist = std::f32::INFINITY;
     loop {
         let (dist, idx, glowing_dist) = distance_estimate(ren, &pos, ig);
-        pos = (&*eye * dist) + pos;
+        pos = (*eye * dist) + pos;
         travel_dist += dist;
         iter += 1;
         // let glowing_dist = ren.objects[idx].get_interface().get_glowing_dist();
@@ -1162,7 +1178,7 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
     loop {
         lev += 1;
         let RaymarchSingleResult{
-            final_dist, idx, pos: pt, iter, travel_dist: _, min_dist} = raymarch_single(ren, &pos, eye, ig);
+            final_dist, idx, pos: pt, iter, min_dist, ..} = raymarch_single(ren, &pos, eye, ig);
         if min_dist < min_min_dist {
             min_min_dist = min_dist;
         }
@@ -1200,9 +1216,9 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
                 break;
             }
 
-			pos = pt.clone();
+			pos = pt;
 			let en2 = -2.0 * eye.dot(&n);
-			*eye += &n * en2;
+			*eye += n * en2;
 
 			if n.dot(&eye) < 0. {
                 flags &= !INONLY;
@@ -1221,7 +1237,7 @@ fn raymarch(ren: &RenderEnv, vi: &mut Vec3, eye: &mut Vec3,
             ret_color.g	+= fc2.g * fcs.g;
             ret_color.b	+= fc2.b * fcs.b;
         }
-        if !(lev < MAX_REFLECTIONS) {
+        if MAX_REFLECTIONS <= lev {
             break;
         }
 	}

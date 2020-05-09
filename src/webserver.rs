@@ -30,14 +30,14 @@ fn render_web(params: &ServerParams, ren: &RenderEnv) -> Vec<u8>{
     
     for y in 0..height {
         for x in 0..width {
-            data[(x + y * width) * 3 + 0] = ((x) * 255 / width) as u8;
+            data[(x + y * width) * 3    ] = ((x) * 255 / width) as u8;
             data[(x + y * width) * 3 + 1] = ((y) * 255 / height) as u8;
             data[(x + y * width) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
-        data[(x as usize + y as usize * width) * 3 + 0] = (fc.r * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3    ] = (fc.r * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
@@ -201,7 +201,7 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
         // render_web(&ren);
         if let Ok(mut image) = tokio::fs::File::open("barb.png").await {
             let mut buf: Vec<u8> = vec![];
-            if let Ok(_) = image.read_to_end(&mut buf).await {
+            if image.read_to_end(&mut buf).await.is_ok() {
                 println!("Responding with image {}", buf.len());
                 Ok(Response::new(Body::from(buf)))
             }
@@ -217,8 +217,8 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
         println!("GET /render, query = {:?}", req.uri().query());
         let (xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
             let [mut xpos, mut ypos, mut zpos, mut yaw, mut pitch] = [0f32; 5];
-            for s in query.split("&") {
-                let tokens: Vec<_> = s.split("=").collect();
+            for s in query.split('&') {
+                let tokens: Vec<_> = s.split('=').collect();
                 match tokens[..] {
                     ["x", x] => if let Ok(f) = x.parse::<f32>() {
                         xpos = f;
@@ -258,7 +258,7 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
         let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
             params.width as u32, params.height as u32, render_web(&params, &ren)).unwrap());
         let mut buf: Vec<u8> = vec![];
-        if let Ok(_) = imbuf.write_to(&mut buf, image::ImageOutputFormat::PNG) {
+        if imbuf.write_to(&mut buf, image::ImageOutputFormat::PNG).is_ok() {
             // let enc = image::png::PNGEncoder::new();
             // let encresult = enc.encode(data, renparam.width, renparam.height, image::ColorType::Rgb8);//(output, &data, width as u32, height as u32, ColorType::RGB(8))
             Ok(Response::builder()
@@ -286,7 +286,7 @@ async fn run_server(addr: SocketAddr, params: Arc<ServerParams>) {
     // Create a server bound on the provided address
     let serve_future = Server::bind(&addr)
         .serve(make_payload_service(|_, params| async move {
-            Ok::<_, Error>(payload_service(|req, params| serve_req(req, params), params))
+            Ok::<_, Error>(payload_service(serve_req, params))
         }, params));
 
     // Wait for the server to complete serving or exit with an error.

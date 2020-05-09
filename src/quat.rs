@@ -104,10 +104,7 @@ impl Quat{
             (1e-10f32).sqrt()
         }
 
-        if ss <= sqrtepsilon() {
-            *self
-        }
-        else if self == o {
+        if ss <= sqrtepsilon() || self == o {
             *self
         }
         else {
