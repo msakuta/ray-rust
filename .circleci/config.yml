@@ -17,4 +17,6 @@ jobs:
 
       - run:
           name: Cargo clippy
-          command: cargo clippy
+          command:
+            rustup component add clippy --toolchain 1.43.1-x86_64-unknown-linux-gnu
+            cargo clippy
