@@ -17,6 +17,6 @@ fn test_add_pixel() {
 
 #[test]
 fn test_scale_pixel() {
-    assert_eq!(scale_pixel(3.5, &image::Rgb::<u8>([1, 2, 3])), image::Rgb::<f32>([3.5, 7.0, 10.5]));
-    assert_eq!(add_pixel(image::Rgb::<f32>([10., 20., 30.]), &scale_pixel(2., &image::Rgb::<u8>([1, 2, 3]))), image::Rgb::<f32>([12., 24., 36.]));
+    assert_eq!(scale_pixel(3.5, image::Rgb::<u8>([1, 2, 3])), image::Rgb::<f32>([3.5, 7.0, 10.5]));
+    assert_eq!(add_pixel(image::Rgb::<f32>([10., 20., 30.]), &scale_pixel(2., image::Rgb::<u8>([1, 2, 3]))), image::Rgb::<f32>([12., 24., 36.]));
 }
