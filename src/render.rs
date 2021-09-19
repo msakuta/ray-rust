@@ -614,6 +614,7 @@ pub struct RenderEnv{
     glow_effect: Option<f32>,
     pub max_reflections: i32,
     pub max_refractions: i32,
+    pub start: std::time::Instant,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -656,6 +657,7 @@ impl RenderEnv{
             glow_effect: None,
             max_reflections: MAX_REFLECTIONS,
             max_refractions: MAX_REFRACTIONS,
+            start: std::time::Instant::now(),
         }
     }
 
@@ -764,23 +766,30 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
     }
     else{
         use std::sync::atomic::{AtomicI32, Ordering};
+        use std::sync::Mutex;
         type WorkerResult = Result<(), mpsc::SendError<(i32, Vec<RenderColor>)>>;
         let scanlines = (ren.yres + thread_count - 1) / thread_count;
         println!("Splitting into {} scanlines; {} threads", scanlines, thread_count);
         crossbeam::scope(|scope| {
+            use std::io::Write;
+            let log_file = Arc::new(Mutex::new(std::io::BufWriter::new(std::fs::File::create("timing.csv").unwrap())));
+            log_file.lock().unwrap().write("tid, line, time\n".as_bytes());
             let counter = Arc::new(AtomicI32::new(0));
             let (tx, rx) = mpsc::channel();
-            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, WorkerResult>> = (0..thread_count).map(|_| {
+            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, WorkerResult>> = (0..thread_count).map(|tid| {
                 let tx1 = mpsc::Sender::clone(&tx);
+                let log_file = log_file.clone();
                 let m_y = counter.clone();
                 scope.spawn(move |_| -> WorkerResult {
                     loop {
                         let iyy = m_y.fetch_add(1, Ordering::SeqCst);
+                        log_file.lock().unwrap().write(format!("{}, {}, {}\n", tid, iyy, ren.start.elapsed().as_nanos()).as_bytes());
                         if ren.yres <= iyy { break }
                         let mut linebuf = vec![RenderColor::zero(); ren.xres as usize];
                         process_line(iyy, &mut |ix: i32, _iy: i32, col: RenderColor| {
                             linebuf[ix as usize] = col;
                         });
+                        log_file.lock().unwrap().write(format!("{}, {}, {}\n", tid, iyy, ren.start.elapsed().as_nanos()).as_bytes());
                         tx1.send((iyy, linebuf))?;
                     }
 
