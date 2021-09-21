@@ -781,6 +781,8 @@ pub fn render(ren: &RenderEnv, pointproc: &mut impl FnMut(i32, i32, &RenderColor
                 let log_file = log_file.clone();
                 let m_y = counter.clone();
                 scope.spawn(move |_| -> WorkerResult {
+                    let stack_var: i32 = 123;
+                    println!("thread {} at {:p}", tid, &stack_var);
                     loop {
                         let iyy = m_y.fetch_add(1, Ordering::SeqCst);
                         log_file.lock().unwrap().write(format!("{}, {}, {}\n", tid, iyy, ren.start.elapsed().as_nanos()).as_bytes());
