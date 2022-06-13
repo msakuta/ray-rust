@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/msakuta/ray-rust.svg?style=svg)](https://circleci.com/gh/msakuta/ray-rust)
+[![Rust](https://github.com/msakuta/ray-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/msakuta/ray-rust/actions/workflows/rust.yml)
 
 # Ray-rust
 
