@@ -5,9 +5,19 @@ authors = ["msakuta <masahiro.sakuta@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-image = "0.22.1"
-crossbeam = "0.7.2"
-vecmath = "1.0.0"
+image = "0.24.2"
+crossbeam = "0.8.1"
 serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
+
+futures = { version = "0.3" }
+
+# Hyper is an asynchronous HTTP library. We'll use it to power our HTTP
+# server and to make HTTP requests.
+hyper = { version = "0.14.19", features = ["full"] }
+tokio = { version = "1.18.2", features = ["full"] }
+tower-service = "0.3.0"
+
+clap = { version = "3.1.18", features = ["cargo"] }
+anyhow = "1.0.57"
