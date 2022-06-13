@@ -1,21 +1,17 @@
-
-
-pub fn fmod(f: f32, freq: f32) -> f32{
+pub fn fmod(f: f32, freq: f32) -> f32 {
     f - (f / freq).floor() * freq
 }
-pub fn imod(f: i32, freq: i32) -> i32{
+pub fn imod(f: i32, freq: i32) -> i32 {
     f - (f as f32 / freq as f32).floor() as i32 * freq
 }
-pub fn umod(f: u32, freq: u32) -> u32{
+pub fn umod(f: u32, freq: u32) -> u32 {
     f - (f as f32 / freq as f32).floor() as u32 * freq
 }
-pub fn fimod(f: f32, freq: f32) -> (f32, u32){
+pub fn fimod(f: f32, freq: f32) -> (f32, u32) {
     let fm = fmod(f, freq);
     let fi = fm.floor();
     (fm - fi, imod(fm as i32, freq as i32) as u32)
 }
-
-
 
 #[test]
 fn test_fmod() {
@@ -36,11 +32,11 @@ fn test_imod() {
 
 #[test]
 fn test_fimod() {
-    fn assert_near(a: f32, b: f32){
+    fn assert_near(a: f32, b: f32) {
         assert!((a - b).abs() < 1e-6);
     }
 
-    fn assert_near2(a: (f32, u32), b: (f32, u32)){
+    fn assert_near2(a: (f32, u32), b: (f32, u32)) {
         assert_near(a.0, b.0);
         assert_eq!(a.1, b.1);
     }
