@@ -6,9 +6,9 @@ use futures::Future;
 
 use hyper::{Body, Request, Response};
 use std::error::Error as StdError;
+use std::marker::PhantomData;
 use std::task;
 use std::task::Poll;
-use std::marker::PhantomData;
 
 // Functions copied and modified from hyper::service::util.
 pub fn make_payload_service<F, Target, Ret, T>(f: F, payload: T) -> MakePayloadServiceFn<F, T>
@@ -25,7 +25,8 @@ pub struct MakePayloadServiceFn<F, T> {
     payload: T,
 }
 
-impl<'t, F, Ret, Target, Svc, MkErr, T> tower_service::Service<&'t Target> for MakePayloadServiceFn<F, T>
+impl<'t, F, Ret, Target, Svc, MkErr, T> tower_service::Service<&'t Target>
+    for MakePayloadServiceFn<F, T>
 where
     F: FnMut(&Target, T) -> Ret,
     Ret: Future<Output = Result<Svc, MkErr>>,
@@ -65,8 +66,7 @@ pub struct PayloadServiceFn<F, R, T> {
     _req: PhantomData<fn(R)>,
 }
 
-impl<F, Ret, E, T> tower_service::Service<hyper::Request<Body>>
-    for PayloadServiceFn<F, Body, T>
+impl<F, Ret, E, T> tower_service::Service<hyper::Request<Body>> for PayloadServiceFn<F, Body, T>
 where
     F: FnMut(Request<Body>, T) -> Ret,
     Ret: Future<Output = Result<Response<Body>, E>>,
@@ -85,5 +85,3 @@ where
         (self.f)(req, self.payload.clone())
     }
 }
-
-

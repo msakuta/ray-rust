@@ -1,22 +1,27 @@
 extern crate tokio;
 
-use crate::render::{render, RenderEnv, RenderColor};
-use std::sync::Arc;
-use tokio::prelude::*;
-use tokio::runtime::Runtime;
-use crate::quat::Quat;
 use crate::hyper_adapt::{make_payload_service, payload_service};
+use crate::quat::Quat;
+use crate::render::{render, RenderColor, RenderEnv};
+use std::sync::Arc;
 use std::thread;
+use tokio::io::AsyncReadExt;
+use tokio::runtime::Runtime;
 
 use {
     hyper::{
         // Miscellaneous types from Hyper for working with HTTP.
-        Body, Request, Response, Server, StatusCode, Error,
+        Body,
+        Error,
+        Request,
+        Response,
+        Server,
+        StatusCode,
     },
     std::net::SocketAddr,
 };
 
-pub struct ServerParams{
+pub struct ServerParams {
     pub width: usize,
     pub height: usize,
     pub thread_count: i32,
@@ -24,20 +29,20 @@ pub struct ServerParams{
     pub ren: RenderEnv,
 }
 
-fn render_web(params: &ServerParams, ren: &RenderEnv) -> Vec<u8>{
+fn render_web(params: &ServerParams, ren: &RenderEnv) -> Vec<u8> {
     let (width, height) = (params.width, params.height);
     let mut data = vec![0u8; 3 * width * height];
-    
+
     for y in 0..height {
         for x in 0..width {
-            data[(x + y * width) * 3    ] = ((x) * 255 / width) as u8;
+            data[(x + y * width) * 3] = ((x) * 255 / width) as u8;
             data[(x + y * width) * 3 + 1] = ((y) * 255 / height) as u8;
             data[(x + y * width) * 3 + 2] = ((x + y) % 32 + 32) as u8;
         }
     }
 
     let mut putpoint = |x: i32, y: i32, fc: &RenderColor| {
-        data[(x as usize + y as usize * width) * 3    ] = (fc.r * 255.).min(255.) as u8;
+        data[(x as usize + y as usize * width) * 3] = (fc.r * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 1] = (fc.g * 255.).min(255.) as u8;
         data[(x as usize + y as usize * width) * 3 + 2] = (fc.b * 255.).min(255.) as u8;
     };
@@ -46,8 +51,15 @@ fn render_web(params: &ServerParams, ren: &RenderEnv) -> Vec<u8>{
     data
 }
 
-async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Response<Body>, hyper::Error> {
-    println!("Got request at {:?} in thread #{:?}", req.uri(), thread::current().id());
+async fn serve_req(
+    req: Request<Body>,
+    params: Arc<ServerParams>,
+) -> Result<Response<Body>, hyper::Error> {
+    println!(
+        "Got request at {:?} in thread #{:?}",
+        req.uri(),
+        thread::current().id()
+    );
 
     use std::f32::consts::PI;
 
@@ -196,55 +208,62 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
             <h2>Debug</h2>
             <div id='label'></div>
         </body>")))
-    }
-    else if req.uri() == "/image" {
+    } else if req.uri() == "/image" {
         // render_web(&ren);
         if let Ok(mut image) = tokio::fs::File::open("barb.png").await {
             let mut buf: Vec<u8> = vec![];
             if image.read_to_end(&mut buf).await.is_ok() {
                 println!("Responding with image {}", buf.len());
                 Ok(Response::new(Body::from(buf)))
-            }
-            else{
+            } else {
                 Ok(Response::new(Body::from("Error reading barb.png")))
             }
-        }
-        else {
+        } else {
             Ok(Response::new(Body::from("image")))
         }
-    }
-    else if req.uri().path() == "/render" {
+    } else if req.uri().path() == "/render" {
         println!("GET /render, query = {:?}", req.uri().query());
         let (xpos, ypos, zpos, yaw, pitch) = if let Some(query) = req.uri().query() {
             let [mut xpos, mut ypos, mut zpos, mut yaw, mut pitch] = [0f32; 5];
             for s in query.split('&') {
                 let tokens: Vec<_> = s.split('=').collect();
                 match tokens[..] {
-                    ["x", x] => if let Ok(f) = x.parse::<f32>() {
-                        xpos = f;
+                    ["x", x] => {
+                        if let Ok(f) = x.parse::<f32>() {
+                            xpos = f;
+                        }
                     }
-                    ["z", z] => if let Ok(f) = z.parse::<f32>() {
-                        zpos = f;
+                    ["z", z] => {
+                        if let Ok(f) = z.parse::<f32>() {
+                            zpos = f;
+                        }
                     }
-                    ["y", y] => if let Ok(f) = y.parse::<f32>() {
-                        ypos = f;
+                    ["y", y] => {
+                        if let Ok(f) = y.parse::<f32>() {
+                            ypos = f;
+                        }
                     }
-                    ["yaw", ss] => if let Ok(f) = ss.parse::<f32>() {
-                        yaw = f;
+                    ["yaw", ss] => {
+                        if let Ok(f) = ss.parse::<f32>() {
+                            yaw = f;
+                        }
                     }
-                    ["pitch", ss] => if let Ok(f) = ss.parse::<f32>() {
-                        pitch = f;
+                    ["pitch", ss] => {
+                        if let Ok(f) = ss.parse::<f32>() {
+                            pitch = f;
+                        }
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
             (xpos, ypos, zpos, yaw, pitch)
-        }
-        else {
+        } else {
             (0., 0., 0., 0., 0.)
         };
-        println!("Rendering with xpos={}, ypos={}, zpos={}, yaw={} pitch={}",
-            xpos, ypos, zpos, yaw, pitch);
+        println!(
+            "Rendering with xpos={}, ypos={}, zpos={}, yaw={} pitch={}",
+            xpos, ypos, zpos, yaw, pitch
+        );
 
         // Cloning a whole RenderEnv object is dumb, but probably faster than deserializing from
         // a file in every request, and we need to modify camera position.
@@ -255,10 +274,20 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
         ren.camera.pyr.y = yaw * PI / 180.;
         ren.camera.pyr.x = pitch * PI / 180.;
         ren.camera.rotation = Quat::from_pyr(&ren.camera.pyr);
-        let imbuf = image::DynamicImage::ImageRgb8(image::ImageBuffer::from_raw(
-            params.width as u32, params.height as u32, render_web(&params, &ren)).unwrap());
+        let imbuf = image::DynamicImage::ImageRgb8(
+            image::ImageBuffer::from_raw(
+                params.width as u32,
+                params.height as u32,
+                render_web(&params, &ren),
+            )
+            .unwrap(),
+        );
         let mut buf: Vec<u8> = vec![];
-        if imbuf.write_to(&mut buf, image::ImageOutputFormat::PNG).is_ok() {
+        let mut cur = std::io::Cursor::new(&mut buf);
+        if imbuf
+            .write_to(&mut cur, image::ImageOutputFormat::Png)
+            .is_ok()
+        {
             // let enc = image::png::PNGEncoder::new();
             // let encresult = enc.encode(data, renparam.width, renparam.height, image::ColorType::Rgb8);//(output, &data, width as u32, height as u32, ColorType::RGB(8))
             Ok(Response::builder()
@@ -267,12 +296,10 @@ async fn serve_req(req: Request<Body>, params: Arc<ServerParams>) -> Result<Resp
                 .header("Content-Type", "image/png")
                 .body(Body::from(buf))
                 .unwrap())
-        }
-        else{
+        } else {
             Ok(Response::new(Body::from("fail to render")))
         }
-    }
-    else{
+    } else {
         Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("empty"))
@@ -284,10 +311,10 @@ async fn run_server(addr: SocketAddr, params: Arc<ServerParams>) {
     println!("Listening on http://{}", addr);
 
     // Create a server bound on the provided address
-    let serve_future = Server::bind(&addr)
-        .serve(make_payload_service(|_, params| async move {
-            Ok::<_, Error>(payload_service(serve_req, params))
-        }, params));
+    let serve_future = Server::bind(&addr).serve(make_payload_service(
+        |_, params| async move { Ok::<_, Error>(payload_service(serve_req, params)) },
+        params,
+    ));
 
     // Wait for the server to complete serving or exit with an error.
     // If an error occurred, print it to stderr.
@@ -296,12 +323,12 @@ async fn run_server(addr: SocketAddr, params: Arc<ServerParams>) {
     }
 }
 
-pub fn run_webserver(params: Arc<ServerParams>) -> std::io::Result<()>{
+pub fn run_webserver(params: Arc<ServerParams>) -> std::io::Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], params.as_ref().port_no));
 
     let future = run_server(addr, params);
 
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     rt.block_on(future);
 
     Ok(())
