@@ -11,7 +11,7 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
 
-futures = { version = "0.3" }
+futures = { version = "0.3.26" }
 
 # Hyper is an asynchronous HTTP library. We'll use it to power our HTTP
 # server and to make HTTP requests.
