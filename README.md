@@ -36,3 +36,9 @@ A very simple Rust implementation of ray tracing renderer.
         <width>     Width of the image [px]
         <height>    Height of the image [px]
 
+
+## Note on web server
+
+Web server is now feature gated, so you need to enable when you build the application, e.g.
+
+    cargo b --features webserver

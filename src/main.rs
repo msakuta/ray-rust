@@ -14,12 +14,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+#[cfg(feature = "webserver")]
 mod hyper_adapt;
 mod modutil;
 mod pixelutil;
 mod quat;
 mod render;
 mod vec3;
+#[cfg(feature = "webserver")]
 mod webserver;
 
 use clap::{crate_authors, crate_version, Arg, Command};
@@ -28,6 +30,7 @@ use render::{
     RenderPattern, RenderSphere, UVMap,
 };
 use vec3::Vec3;
+#[cfg(feature = "webserver")]
 use webserver::{run_webserver, ServerParams};
 
 fn main() -> anyhow::Result<()> {
@@ -129,6 +132,7 @@ Good for interactive session.")
     let serialize_file = parser_opt::<String>(&matches, "serialize_file");
     let deserialize_file = parser_opt::<String>(&matches, "deserialize_file");
     let webserver = matches.is_present("webserver");
+    #[cfg(feature = "webserver")]
     let port_no = parser(&matches, "port_no");
 
     let xmax: usize = width/*	((XRES + 1) * 2)*/;
@@ -296,6 +300,7 @@ Good for interactive session.")
     }
 
     if webserver {
+        #[cfg(feature = "webserver")]
         return Ok(run_webserver(Arc::new(ServerParams {
             width,
             height,
@@ -303,6 +308,9 @@ Good for interactive session.")
             port_no,
             ren,
         }))?);
+
+        #[cfg(not(feature = "webserver"))]
+        return Err(anyhow::anyhow!("Web server is not enabled in build config"));
     }
 
     if let Some(file_name) = serialize_file {
