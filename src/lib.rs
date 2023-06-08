@@ -10,7 +10,7 @@ extern crate serde_yaml;
 mod hyper_adapt;
 mod modutil;
 mod pixelutil;
-mod quat;
+pub mod quat;
 pub mod render;
 pub mod vec3;
 #[cfg(feature = "webserver")]
