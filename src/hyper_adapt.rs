@@ -1,10 +1,8 @@
 //! Dirty methods and structures that we don't want to expose to the rest of the code
 //! but necessary for adapting hyper crate
-extern crate tower_service;
-
 use futures::Future;
 
-use hyper::{Body, Request, Response};
+use ::hyper::{Body, Request, Response};
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::task;

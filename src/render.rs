@@ -885,8 +885,10 @@ pub fn render(
                 }
             }
 
-            handles.into_iter().map(|h| h.join())
-            .collect::<Result<Vec<_>, _>>()
+            handles
+                .into_iter()
+                .map(|h| h.join())
+                .collect::<Result<Vec<_>, _>>()
         })
         .expect("Worker thread join failed");
     }

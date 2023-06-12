@@ -1,9 +1,5 @@
-extern crate image;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate clap;
-extern crate serde_yaml;
 
 use image::ColorType;
 use std::collections::HashMap;

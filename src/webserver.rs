@@ -1,12 +1,10 @@
-extern crate tokio;
-
 use crate::hyper_adapt::{make_payload_service, payload_service};
 use crate::quat::Quat;
 use crate::render::{render, RenderColor, RenderEnv};
 use std::sync::Arc;
 use std::thread;
-use tokio::io::AsyncReadExt;
-use tokio::runtime::Runtime;
+use ::tokio::io::AsyncReadExt;
+use ::tokio::runtime::Runtime;
 
 use {
     hyper::{
