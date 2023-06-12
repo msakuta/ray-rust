@@ -841,15 +841,14 @@ pub fn render(
             "Splitting into {} scanlines; {} threads",
             scanlines, thread_count
         );
-        crossbeam::scope(|scope| {
+        std::thread::scope(|scope| {
             let counter = Arc::new(AtomicI32::new(0));
             let (tx, rx) = mpsc::channel();
-            let handles: Vec<crossbeam::thread::ScopedJoinHandle<'_, WorkerResult>> = (0
-                ..thread_count)
+            let handles: Vec<_> = (0..thread_count)
                 .map(|_| {
                     let tx1 = mpsc::Sender::clone(&tx);
                     let m_y = counter.clone();
-                    scope.spawn(move |_| -> WorkerResult {
+                    scope.spawn(move || -> WorkerResult {
                         loop {
                             let iyy = m_y.fetch_add(1, Ordering::SeqCst);
                             if ren.yres <= iyy {
@@ -886,12 +885,8 @@ pub fn render(
                 }
             }
 
-            for (_iy, h) in handles.into_iter().enumerate() {
-                if h.join().is_ok() {
-                } else {
-                    println!("Join failed");
-                }
-            }
+            handles.into_iter().map(|h| h.join())
+            .collect::<Result<Vec<_>, _>>()
         })
         .expect("Worker thread join failed");
     }

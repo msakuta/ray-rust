@@ -1,4 +1,3 @@
-extern crate crossbeam;
 extern crate image;
 extern crate serde;
 #[macro_use]
