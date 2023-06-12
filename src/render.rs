@@ -841,13 +841,13 @@ pub fn render(
             "Splitting into {} scanlines; {} threads",
             scanlines, thread_count
         );
+        let counter = AtomicI32::new(0);
         std::thread::scope(|scope| {
-            let counter = Arc::new(AtomicI32::new(0));
             let (tx, rx) = mpsc::channel();
             let handles: Vec<_> = (0..thread_count)
                 .map(|_| {
                     let tx1 = mpsc::Sender::clone(&tx);
-                    let m_y = counter.clone();
+                    let m_y = &counter;
                     scope.spawn(move || -> WorkerResult {
                         loop {
                             let iyy = m_y.fetch_add(1, Ordering::SeqCst);
