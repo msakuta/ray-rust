@@ -42,3 +42,7 @@ A very simple Rust implementation of ray tracing renderer.
 Web server is now feature gated, so you need to enable when you build the application, e.g.
 
     cargo b --features webserver
+
+## Minimum Supported Rust Version
+
+1.63.0
