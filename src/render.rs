@@ -802,7 +802,7 @@ pub fn render(
     ren: &RenderEnv,
     pointproc: &mut impl FnMut(i32, i32, &RenderColor),
     thread_count: i32,
-) {
+) -> anyhow::Result<()> {
     let process_line = |iy: i32, point_middle: &mut dyn FnMut(i32, i32, RenderColor)| {
         for ix in 0..ren.xres {
             let mut vi = ren.camera.position;
@@ -885,13 +885,18 @@ pub fn render(
                 }
             }
 
-            handles
+            let res = handles
                 .into_iter()
-                .map(|h| h.join())
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .expect("Worker thread join failed");
+                .map(|h| -> Result<(), anyhow::Error> {
+                    let joined = h.join();
+                    let joined = joined.map_err(|e| anyhow::anyhow!("Join failed"))?;
+                    Ok(joined?)
+                })
+                .collect::<Result<Vec<_>, _>>();
+            res
+        })?;
     }
+    Ok(())
 }
 
 // This warning is stupid, these variables are intermediate variables for the
